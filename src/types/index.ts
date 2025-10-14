@@ -26,17 +26,38 @@ export interface ProjectMember {
   user_id: string;
 }
 
+// Error Type enum
+export type ErrorType = '기능오류' | '신규개발(개선)' | 'UI/UX오류' | '시스템연동오류';
+
+// Priority enum
+export type Priority = 'High' | 'Medium' | 'Low';
+
 // Test Case types (updated for new schema)
 export interface TestCase {
   case_id: string;
   project_id: string;
   category_id: number;
   category_name?: string; // Joined from categories table
+  
+  // 계층 구조 필드
+  parent_id?: string;
+  depth: number;
+  sort_order: number;
+  
   item: string;
   steps?: string;
   expected?: string;
-  priority?: 'High' | 'Mid' | 'Low';
+  priority?: Priority;
+  
+  // 새로운 기능 필드
+  error_type?: ErrorType;
+  fix_checked: boolean;
+  
   results?: TestResult[];
+  
+  // UI 상태 (클라이언트 전용)
+  expanded?: boolean;
+  children?: TestCase[];
 }
 
 // Test Result types (updated for new schema)
@@ -45,7 +66,7 @@ export interface TestResult {
   case_id: string;
   user_id: string;
   user_name?: string; // Joined from users table
-  status: 'pass' | 'fail' | 'blocker';
+  status: 'pass' | 'fail' | 'pending';
   environment?: {
     os?: string;
     device?: string;
@@ -56,10 +77,22 @@ export interface TestResult {
   created_at: string;
 }
 
+export interface CreateTestCaseRequest {
+  project_id: string;
+  category_id: number;
+  parent_id?: string;
+  item: string;
+  steps?: string;
+  expected?: string;
+  priority?: Priority;
+  error_type?: ErrorType;
+  fix_checked?: boolean;
+}
+
 export interface CreateTestResultRequest {
   case_id: string;
   user_id: string;
-  status: 'pass' | 'fail' | 'blocker';
+  status: 'pass' | 'fail' | 'pending';
   environment?: {
     os?: string;
     device?: string;
@@ -67,6 +100,8 @@ export interface CreateTestResultRequest {
   };
   notes?: string;
   bug_id?: string;
+  error_type?: ErrorType;
+  fix_checked?: boolean;
 }
 
 // Legacy types for backward compatibility during migration

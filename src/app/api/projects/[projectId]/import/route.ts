@@ -61,7 +61,7 @@ export async function POST(
           results.categories_imported++;
         }
       } catch (error) {
-        results.errors.push(`Category "${category.category_name}": ${error.message}`);
+        results.errors.push(`Category "${category.category_name}": ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     
@@ -108,7 +108,7 @@ export async function POST(
           results.test_cases_imported++;
         }
       } catch (error) {
-        results.errors.push(`Test case "${testCase.item}": ${error.message}`);
+        results.errors.push(`Test case "${testCase.item}": ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     

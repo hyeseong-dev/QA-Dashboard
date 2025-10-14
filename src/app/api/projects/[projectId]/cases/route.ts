@@ -12,11 +12,12 @@ export async function GET(
     // Get test cases for the project with category information
     const casesResult = await query(
       `SELECT tc.case_id, tc.project_id, tc.category_id, c.category_name, 
-              tc.item, tc.steps, tc.expected, tc.priority 
+              tc.item, tc.steps, tc.expected, tc.priority,
+              tc.parent_id, tc.depth, tc.sort_order, tc.error_type, tc.fix_checked 
        FROM test_cases tc
        JOIN categories c ON tc.category_id = c.category_id
        WHERE tc.project_id = $1 
-       ORDER BY c.category_name, tc.priority DESC, tc.item`,
+       ORDER BY tc.sort_order, tc.depth, tc.case_id`,
       [projectId]
     );
     

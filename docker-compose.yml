@@ -12,7 +12,9 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./database/init:/docker-entrypoint-initdb.d/init
+      - ./database/migrations:/docker-entrypoint-initdb.d/migrations
+      - ./database/seeds:/docker-entrypoint-initdb.d/seeds
     restart: unless-stopped
 
 volumes:
