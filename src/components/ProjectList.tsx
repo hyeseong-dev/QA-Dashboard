@@ -18,6 +18,20 @@ export default function ProjectList({ onProjectSelect, onCreateProject }: Projec
   const [sortField, setSortField] = useState<SortField>('project_name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   
+  // 인증 컨텍스트에서 사용자 정보 가져오기
+  const { user } = useAuth();
+  
+  // 사용자 역할 기반 관리자 모드 (Admin 권한 사용자는 자동으로 관리자 모드)
+  const isAdminUser = user?.role === 'Admin';
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  
+  // Admin 사용자의 경우 컴포넌트 마운트 시 관리자 모드 자동 활성화
+  useEffect(() => {
+    if (isAdminUser) {
+      setIsAdminMode(true);
+    }
+  }, [isAdminUser]);
+  
   // 모바일 화면 감지 (768px 이하)
   const [isMobile, setIsMobile] = useState(false);
 
@@ -52,6 +66,65 @@ export default function ProjectList({ onProjectSelect, onCreateProject }: Projec
       setError('서버 연결에 실패했습니다.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 관리자 모드 토글 함수 (Admin 사용자만 사용 가능)
+  const handleAdminModeToggle = () => {
+    if (!isAdminUser) {
+      alert('관리자 권한이 필요합니다.');
+      return;
+    }
+    setIsAdminMode(!isAdminMode);
+  };
+
+
+  // 프로젝트 상태 토글 함수
+  const toggleProjectStatus = async (projectId: string, currentStatus: string) => {
+    if (!isAdminMode) return;
+    
+    const newStatus = currentStatus === 'Active' ? 'Archived' : 'Active';
+    const confirmMessage = newStatus === 'Archived' 
+      ? '이 프로젝트를 비활성화하시겠습니까?' 
+      : '이 프로젝트를 활성화하시겠습니까?';
+    
+    if (!window.confirm(confirmMessage)) return;
+    
+    try {
+      const response = await fetch(`/api/projects/${projectId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        },
+        body: JSON.stringify({
+          status: newStatus
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        // 프로젝트 목록 업데이트
+        setProjects(prevProjects => 
+          prevProjects.map(project => 
+            project.project_id === projectId 
+              ? { ...project, status: newStatus }
+              : project
+          )
+        );
+        
+        const statusText = newStatus === 'Active' ? '활성화' : '비활성화';
+        alert(`프로젝트가 성공적으로 ${statusText}되었습니다.`);
+      } else {
+        const errorData = await response.json();
+        alert(`상태 변경 실패: ${errorData.error}`);
+      }
+    } catch (error) {
+      console.error('Error toggling project status:', error);
+      alert('프로젝트 상태 변경 중 오류가 발생했습니다.');
     }
   };
 
@@ -179,11 +252,28 @@ export default function ProjectList({ onProjectSelect, onCreateProject }: Projec
               <div className={`${
                 isMobile ? 'flex flex-col gap-3' : 'flex justify-between items-center'
               }`}>
-                <h2 className={`font-bold text-slate-800 ${
-                  isMobile ? 'text-lg text-center' : 'text-2xl'
-                }`}>
-                  프로젝트 목록 ({projects.length}개)
-                </h2>
+                <div className="flex items-center gap-4">
+                  <h2 className={`font-bold text-slate-800 ${
+                    isMobile ? 'text-lg text-center' : 'text-2xl'
+                  }`}>
+                    프로젝트 목록 ({projects.length}개)
+                  </h2>
+                  
+                  {/* 관리자 모드 토글 - Admin 사용자에게만 표시 */}
+                  {isAdminUser && (
+                    <button
+                      onClick={handleAdminModeToggle}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                        isAdminMode 
+                          ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {isAdminMode ? '🔓 관리자 모드' : '🔒 관리자 모드'}
+                    </button>
+                  )}
+                </div>
+                
                 <button
                   onClick={onCreateProject}
                   className={`bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-colors inline-flex items-center gap-2 ${
@@ -204,6 +294,8 @@ export default function ProjectList({ onProjectSelect, onCreateProject }: Projec
                       key={project.project_id}
                       project={project}
                       onSelect={() => onProjectSelect(project.project_id)}
+                      isAdminMode={isAdminMode}
+                      onToggleStatus={toggleProjectStatus}
                     />
                   ))}
                 </div>
@@ -256,6 +348,8 @@ export default function ProjectList({ onProjectSelect, onCreateProject }: Projec
                             project={project}
                             onSelect={() => onProjectSelect(project.project_id)}
                             isEven={index % 2 === 0}
+                            isAdminMode={isAdminMode}
+                            onToggleStatus={toggleProjectStatus}
                           />
                         ))}
                       </tbody>
@@ -340,9 +434,11 @@ interface ProjectTableRowProps {
   project: Project;
   onSelect: () => void;
   isEven: boolean;
+  isAdminMode: boolean;
+  onToggleStatus: (projectId: string, currentStatus: string) => void;
 }
 
-function ProjectTableRow({ project, onSelect, isEven }: ProjectTableRowProps) {
+function ProjectTableRow({ project, onSelect, isEven, isAdminMode, onToggleStatus }: ProjectTableRowProps) {
   return (
     <tr className={`hover:bg-slate-50 transition-colors ${isEven ? 'bg-white' : 'bg-slate-25'}`}>
       <td className="px-6 py-4 whitespace-nowrap">
@@ -372,13 +468,29 @@ function ProjectTableRow({ project, onSelect, isEven }: ProjectTableRowProps) {
         </span>
       </td>
       <td className="px-6 py-4 text-right">
-        <button
-          onClick={onSelect}
-          className="inline-flex items-center px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
-        >
-          <span className="mr-1">🚀</span>
-          대시보드 진입
-        </button>
+        <div className="flex items-center justify-end gap-2">
+          {isAdminMode && (
+            <button
+              onClick={() => onToggleStatus(project.project_id, project.status)}
+              className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded transition-colors ${
+                project.status === 'Active'
+                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+              }`}
+              title={project.status === 'Active' ? '프로젝트 비활성화' : '프로젝트 활성화'}
+            >
+              {project.status === 'Active' ? '⏸️ 비활성화' : '▶️ 활성화'}
+            </button>
+          )}
+          <button
+            onClick={onSelect}
+            className="inline-flex items-center px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
+            disabled={project.status !== 'Active'}
+          >
+            <span className="mr-1">🚀</span>
+            대시보드 진입
+          </button>
+        </div>
       </td>
     </tr>
   );
@@ -387,9 +499,11 @@ function ProjectTableRow({ project, onSelect, isEven }: ProjectTableRowProps) {
 interface ProjectCardProps {
   project: Project;
   onSelect: () => void;
+  isAdminMode: boolean;
+  onToggleStatus: (projectId: string, currentStatus: string) => void;
 }
 
-function ProjectCard({ project, onSelect }: ProjectCardProps) {
+function ProjectCard({ project, onSelect, isAdminMode, onToggleStatus }: ProjectCardProps) {
   return (
     <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start mb-3">
@@ -416,13 +530,31 @@ function ProjectCard({ project, onSelect }: ProjectCardProps) {
         )}
       </p>
       
-      <button
-        onClick={onSelect}
-        className="w-full inline-flex items-center justify-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
-      >
-        <span className="mr-2">🚀</span>
-        대시보드 진입
-      </button>
+      <div className="flex gap-2">
+        {isAdminMode && (
+          <button
+            onClick={() => onToggleStatus(project.project_id, project.status)}
+            className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              project.status === 'Active'
+                ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                : 'bg-green-100 text-green-700 hover:bg-green-200'
+            }`}
+            title={project.status === 'Active' ? '프로젝트 비활성화' : '프로젝트 활성화'}
+          >
+            {project.status === 'Active' ? '⏸️ 비활성화' : '▶️ 활성화'}
+          </button>
+        )}
+        <button
+          onClick={onSelect}
+          className={`inline-flex items-center justify-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            isAdminMode ? 'flex-1' : 'w-full'
+          }`}
+          disabled={project.status !== 'Active'}
+        >
+          <span className="mr-2">🚀</span>
+          대시보드 진입
+        </button>
+      </div>
     </div>
   );
 }
