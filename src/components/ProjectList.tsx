@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Project } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ProjectListProps {
   onProjectSelect: (projectId: string) => void;
