@@ -42,11 +42,18 @@ export async function GET(
       resultsByCase[result.case_id].push(result);
     });
     
-    // Combine cases with their results
-    const testCases: TestCase[] = casesResult.rows.map(testCase => ({
-      ...testCase,
-      results: resultsByCase[testCase.case_id] || []
-    }));
+    // Combine cases with their results and calculate latest_status
+    const testCases: TestCase[] = casesResult.rows.map(testCase => {
+      const results = resultsByCase[testCase.case_id] || [];
+      const latestResult = results.length > 0 ? results[0] : null; // results are ordered by created_at DESC
+      
+      return {
+        ...testCase,
+        results,
+        latest_status: latestResult?.status || null,
+        total_attempts: results.length
+      };
+    });
     
     return NextResponse.json(testCases);
   } catch (error) {

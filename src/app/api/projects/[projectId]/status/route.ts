@@ -9,7 +9,7 @@ export async function PATCH(
   { params }: { params: { projectId: string } }
 ) {
   try {
-    const { projectId } = params;
+    const { projectId } = await params;
     const body = await request.json();
     const { status } = body;
     
@@ -115,7 +115,7 @@ export async function GET(
   { params }: { params: { projectId: string } }
 ) {
   try {
-    const { projectId } = params;
+    const { projectId } = await params;
     
     // 프로젝트 상태 조회
     const result = await query(

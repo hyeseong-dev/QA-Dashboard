@@ -151,8 +151,8 @@ export default function TestCaseSpreadsheet({
         aValue = a.results?.[0]?.user_name || '';
         bValue = b.results?.[0]?.user_name || '';
       } else if (state.sortField === 'total_attempts') {
-        aValue = a.results?.length || 0;
-        bValue = b.results?.length || 0;
+        aValue = a.total_attempts || 0;
+        bValue = b.total_attempts || 0;
       } else if (state.sortField === 'priority') {
         const priorityOrder = { 'High': 3, 'Mid': 2, 'Low': 1 };
         aValue = priorityOrder[a.priority as keyof typeof priorityOrder] || 0;
@@ -1676,7 +1676,7 @@ function TestCaseRow({
   const [editValue, setEditValue] = useState('');
 
   const latestResult = testCase.results?.[0];
-  const totalAttempts = testCase.results?.length || 0;
+  const totalAttempts = testCase.total_attempts || 0;
 
   // 오류 유형별 색상 클래스
   const getErrorTypeClass = (errorType?: string) => {

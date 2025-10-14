@@ -55,6 +55,10 @@ export interface TestCase {
   
   results?: TestResult[];
   
+  // 계산된 필드
+  latest_status?: 'pass' | 'fail' | 'pending' | null;
+  total_attempts?: number;
+  
   // UI 상태 (클라이언트 전용)
   expanded?: boolean;
   children?: TestCase[];
