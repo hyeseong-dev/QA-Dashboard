@@ -20,6 +20,22 @@ export default function QAEnvironmentSetup({ onSetupComplete }: QAEnvironmentSet
     device: '',
     version: ''
   });
+  
+  // 모바일 화면 감지 (768px 이하)
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    checkIsMobile();
+    window.addEventListener('resize', checkIsMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkIsMobile);
+    };
+  }, []);
 
   useEffect(() => {
     loadUsers();

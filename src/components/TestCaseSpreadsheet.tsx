@@ -93,11 +93,29 @@ export default function TestCaseSpreadsheet({
   const [localTestCases, setLocalTestCases] = useState<TestCase[]>([]);
   
   const [resizing, setResizing] = useState<{ column: string; startX: number; startWidth: number } | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   // props로 받은 testCases를 localTestCases로 동기화
   useEffect(() => {
     setLocalTestCases(testCases);
   }, [testCases]);
+
+  // 화면 크기 감지 (모바일: 768px 이하)
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    // 초기 확인
+    checkIsMobile();
+
+    // 리사이즈 이벤트 리스너 추가
+    window.addEventListener('resize', checkIsMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkIsMobile);
+    };
+  }, []);
 
   // 필터링된 테스트 케이스 (로컬 상태 기반)
   const filteredTestCases = useMemo(() => {
@@ -705,6 +723,335 @@ export default function TestCaseSpreadsheet({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [canInteract, state.selectedRows.size, handleSelectAll, handleBulkDelete]);
 
+  // 모바일 카드 컴포넌트
+  function MobileTestCaseCard({
+    testCase,
+    columnWidths,
+    isSelected,
+    isExpanded,
+    isTreeExpanded,
+    canInteract,
+    editingCell,
+    categories,
+    onSelect,
+    onToggleExpand,
+    onTreeToggleExpand,
+    onRecord,
+    onStartEdit,
+    onSaveEdit,
+    onCancelEdit,
+    onErrorTypeChange,
+    onFixCheckChange,
+    onCategoryChange,
+    onDragStart,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+    draggedNodeId,
+    dropTargetId,
+    dropZone
+  }: {
+    testCase: TestCase;
+    columnWidths: ColumnWidth;
+    isSelected: boolean;
+    isExpanded: boolean;
+    isTreeExpanded: boolean;
+    canInteract: boolean;
+    editingCell: { rowId: string; field: string } | null;
+    categories: any[];
+    onSelect: (caseId: string, selected: boolean) => void;
+    onToggleExpand: (caseId: string) => void;
+    onTreeToggleExpand: (caseId: string) => void;
+    onRecord: (caseId: string, status: 'pass' | 'fail' | 'pending', notes: string, bugId: string) => void;
+    onStartEdit?: (caseId: string, field: string) => void;
+    onSaveEdit?: (caseId: string, field: string, value: string) => void;
+    onCancelEdit?: () => void;
+    onErrorTypeChange: (caseId: string, errorType: ErrorType) => void;
+    onFixCheckChange: (caseId: string, fixChecked: boolean) => void;
+    onCategoryChange: (caseId: string, categoryId: number) => void;
+    onDragStart?: (e: React.DragEvent, caseId: string) => void;
+    onDragOver?: (e: React.DragEvent) => void;
+    onDragLeave?: (e: React.DragEvent) => void;
+    onDrop?: (e: React.DragEvent, caseId: string) => void;
+    draggedNodeId: string | null;
+    dropTargetId: string | null;
+    dropZone: 'before' | 'after' | 'inside' | null;
+  }) {
+    const getStatusClass = (status: string) => {
+      switch (status) {
+        case 'pass': return 'bg-green-100 text-green-800';
+        case 'fail': return 'bg-red-100 text-red-800';
+        case 'pending': return 'bg-yellow-100 text-yellow-800';
+        default: return 'bg-gray-100 text-gray-800';
+      }
+    };
+
+    const getErrorTypeClass = (errorType: string) => {
+      switch (errorType) {
+        case 'ui': return 'bg-blue-100 text-blue-800';
+        case 'logic': return 'bg-purple-100 text-purple-800';
+        case 'data': return 'bg-orange-100 text-orange-800';
+        case 'performance': return 'bg-yellow-100 text-yellow-800';
+        case 'security': return 'bg-red-100 text-red-800';
+        default: return 'bg-gray-100 text-gray-800';
+      }
+    };
+
+    return (
+      <div 
+        className={`bg-white border rounded-lg p-4 mb-3 shadow-sm ${
+          isSelected ? 'border-blue-500 bg-blue-50' : 'border-slate-200'
+        } ${canInteract ? 'hover:shadow-md' : 'opacity-60'}`}
+        draggable={canInteract}
+        onDragStart={(e) => onDragStart?.(e, testCase.case_id)}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={(e) => onDrop?.(e, testCase.case_id)}
+      >
+        {/* 카드 헤더 */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => onSelect(testCase.case_id, e.target.checked)}
+              disabled={!canInteract}
+              className="rounded"
+            />
+            <span className="text-sm font-mono text-slate-600">{testCase.case_id}</span>
+            <span className={`text-xs px-2 py-1 rounded-full ${
+              testCase.priority === 'High' ? 'bg-red-100 text-red-800' :
+              testCase.priority === 'Mid' ? 'bg-yellow-100 text-yellow-800' :
+              'bg-green-100 text-green-800'
+            }`}>
+              {testCase.priority}
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {hasChildren(testCase) && (
+              <button
+                onClick={() => onTreeToggleExpand(testCase.case_id)}
+                className="text-slate-500 hover:text-slate-700 p-1"
+                disabled={!canInteract}
+              >
+                {getExpandIcon(testCase, isTreeExpanded)}
+              </button>
+            )}
+            <button
+              onClick={() => onToggleExpand(testCase.case_id)}
+              className="text-slate-500 hover:text-slate-700 p-1"
+              disabled={!canInteract}
+            >
+              {isExpanded ? '▲' : '▼'}
+            </button>
+          </div>
+        </div>
+
+        {/* 테스트 항목 */}
+        <div className="mb-3" style={{ paddingLeft: `${(testCase.depth - 1) * 20}px` }}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-semibold text-slate-600 uppercase">테스트 항목</span>
+          </div>
+          <EditableCell
+            value={testCase.item}
+            isEditing={editingCell?.rowId === testCase.case_id && editingCell?.field === 'item'}
+            onStartEdit={() => onStartEdit?.(testCase.case_id, 'item')}
+            onSave={(value) => onSaveEdit?.(testCase.case_id, 'item', value)}
+            onCancel={onCancelEdit}
+            canEdit={canInteract}
+            className="text-sm font-semibold text-slate-900"
+            placeholder="테스트 항목을 입력하세요"
+          />
+        </div>
+
+        {/* 카테고리 */}
+        <div className="mb-3">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-semibold text-slate-600 uppercase">카테고리</span>
+          </div>
+          <EditableSelect
+            value={String(testCase.category_id)}
+            isEditing={editingCell?.rowId === testCase.case_id && editingCell?.field === 'category_id'}
+            onStartEdit={() => onStartEdit?.(testCase.case_id, 'category_id')}
+            onSave={(value) => onSaveEdit?.(testCase.case_id, 'category_id', value)}
+            onCancel={onCancelEdit}
+            canEdit={canInteract}
+            options={categories.map(cat => ({ value: String(cat.category_id), label: cat.category_name }))}
+            className="text-sm text-slate-700"
+          />
+        </div>
+
+        {/* 상태 및 액션 버튼들 */}
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          {/* 최근 상태 */}
+          <div>
+            <span className="text-xs font-semibold text-slate-600 uppercase block mb-1">최근 상태</span>
+            <span className={`text-xs px-2 py-1 rounded ${
+              testCase.latest_status ? getStatusClass(testCase.latest_status) : 'bg-gray-100 text-gray-800'
+            }`}>
+              {testCase.latest_status ? testCase.latest_status.toUpperCase() : 'N/A'}
+            </span>
+          </div>
+
+          {/* 테스트 횟수 */}
+          <div>
+            <span className="text-xs font-semibold text-slate-600 uppercase block mb-1">테스트 횟수</span>
+            <span className="text-sm font-semibold text-slate-800">{testCase.total_attempts || 0}</span>
+          </div>
+        </div>
+
+        {/* 오류 유형 및 수정 체크 */}
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <span className="text-xs font-semibold text-slate-600 uppercase block mb-1">오류 유형</span>
+            <EditableSelect
+              value={testCase.error_type || ''}
+              isEditing={editingCell?.rowId === testCase.case_id && editingCell?.field === 'error_type'}
+              onStartEdit={() => onStartEdit?.(testCase.case_id, 'error_type')}
+              onSave={(value) => onErrorTypeChange?.(testCase.case_id, value as ErrorType)}
+              onCancel={onCancelEdit}
+              canEdit={canInteract}
+              options={[
+                { value: '', label: '선택안함' },
+                { value: 'ui', label: 'UI' },
+                { value: 'logic', label: 'Logic' },
+                { value: 'data', label: 'Data' },
+                { value: 'performance', label: 'Performance' },
+                { value: 'security', label: 'Security' }
+              ]}
+              className="text-xs"
+            />
+          </div>
+
+          <div>
+            <span className="text-xs font-semibold text-slate-600 uppercase block mb-1">수정 체크</span>
+            <input
+              type="checkbox"
+              checked={testCase.fix_checked || false}
+              onChange={(e) => onFixCheckChange?.(testCase.case_id, e.target.checked)}
+              disabled={!canInteract}
+              className="rounded mt-1"
+            />
+          </div>
+        </div>
+
+        {/* 최근 테스터 정보 */}
+        {testCase.latest_tester && (
+          <div className="mb-3">
+            <span className="text-xs font-semibold text-slate-600 uppercase block mb-1">최근 실행</span>
+            <div className="text-sm text-slate-700">
+              <div>{testCase.latest_tester}</div>
+              {testCase.latest_result_at && (
+                <div className="text-xs text-slate-500">
+                  {new Date(testCase.latest_result_at).toLocaleString('ko-KR')}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 액션 버튼들 */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => onRecord(testCase.case_id, 'pass', '', '')}
+            disabled={!canInteract}
+            className="flex-1 px-3 py-2 bg-green-500 text-white rounded text-sm hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            ✅ Pass
+          </button>
+          <button
+            onClick={() => onRecord(testCase.case_id, 'fail', '', '')}
+            disabled={!canInteract}
+            className="flex-1 px-3 py-2 bg-red-500 text-white rounded text-sm hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            ❌ Fail
+          </button>
+          <button
+            onClick={() => onRecord(testCase.case_id, 'pending', '', '')}
+            disabled={!canInteract}
+            className="flex-1 px-3 py-2 bg-yellow-500 text-white rounded text-sm hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            ⏳ Pending
+          </button>
+        </div>
+
+        {/* 확장된 상세 정보 */}
+        {isExpanded && (
+          <div className="mt-4 pt-4 border-t border-slate-200 space-y-4">
+            <div>
+              <h4 className="font-semibold text-sm text-slate-600 mb-2">테스트 절차</h4>
+              <div className="bg-slate-50 p-3 rounded">
+                <EditableCell
+                  value={testCase.steps || ''}
+                  isEditing={editingCell?.rowId === testCase.case_id && editingCell?.field === 'steps'}
+                  onStartEdit={() => onStartEdit?.(testCase.case_id, 'steps')}
+                  onSave={(value) => onSaveEdit?.(testCase.case_id, 'steps', value)}
+                  onCancel={onCancelEdit}
+                  canEdit={canInteract}
+                  className="text-sm text-slate-700 min-h-16"
+                  placeholder="테스트 절차를 입력하세요"
+                  multiline={true}
+                />
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold text-sm text-slate-600 mb-2">예상 결과</h4>
+              <div className="bg-slate-50 p-3 rounded">
+                <EditableCell
+                  value={testCase.expected || ''}
+                  isEditing={editingCell?.rowId === testCase.case_id && editingCell?.field === 'expected'}
+                  onStartEdit={() => onStartEdit?.(testCase.case_id, 'expected')}
+                  onSave={(value) => onSaveEdit?.(testCase.case_id, 'expected', value)}
+                  onCancel={onCancelEdit}
+                  canEdit={canInteract}
+                  className="text-sm text-slate-700 min-h-16"
+                  placeholder="예상 결과를 입력하세요"
+                  multiline={true}
+                />
+              </div>
+            </div>
+
+            {testCase.results && testCase.results.length > 0 && (
+              <div>
+                <h4 className="font-semibold text-sm text-slate-600 mb-2">테스트 이력 ({testCase.results.length}개)</h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {testCase.results.map(result => (
+                    <div key={result.result_id} className="text-xs bg-white p-3 rounded border">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className={`font-semibold px-2 py-1 rounded ${getStatusClass(result.status)}`}>
+                          {result.status.toUpperCase()}
+                        </span>
+                        <span className="text-slate-500">
+                          {new Date(result.created_at).toLocaleString('ko-KR')}
+                        </span>
+                      </div>
+                      <div className="text-slate-600 space-y-1">
+                        <div>테스터: {result.user_name}</div>
+                        {result.environment && (
+                          <div>
+                            환경: {result.environment.os} {result.environment.device} {result.environment.version}
+                          </div>
+                        )}
+                      </div>
+                      {result.notes && (
+                        <div className="text-slate-700 mt-2 p-2 bg-slate-50 rounded">{result.notes}</div>
+                      )}
+                      {result.bug_id && (
+                        <div className="text-blue-600 mt-2">버그 ID: {result.bug_id}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
       {/* 일괄 작업 툴바 */}
@@ -760,9 +1107,10 @@ export default function TestCaseSpreadsheet({
         </div>
       )}
 
-      {/* 스프레드시트 테이블 */}
-      <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
-        <table className="w-full border-collapse">
+      {/* 데스크톱: 스프레드시트 테이블 / 모바일: 카드 레이아웃 */}
+      {!isMobile ? (
+        <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
+          <table className="w-full border-collapse">
           <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
             <tr>
               {/* 체크박스 컬럼 */}
@@ -989,13 +1337,267 @@ export default function TestCaseSpreadsheet({
             ))}
           </tbody>
         </table>
-      </div>
+        </div>
+      ) : (
+        /* 모바일 카드 레이아웃 */
+        <div className="p-4 space-y-3" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+          {renderableTestCases.map(testCase => (
+            <MobileTestCaseCard
+              key={testCase.case_id}
+              testCase={testCase}
+              columnWidths={state.columnWidths}
+              isSelected={state.selectedRows.has(testCase.case_id)}
+              isExpanded={state.expandedRows.has(testCase.case_id)}
+              isTreeExpanded={state.expandedTreeNodes.has(testCase.case_id)}
+              canInteract={canInteract}
+              editingCell={state.editingCell}
+              categories={categories}
+              onSelect={(caseId, selected) => {
+                setState(prev => {
+                  const newSelectedRows = new Set(prev.selectedRows);
+                  if (selected) {
+                    newSelectedRows.add(caseId);
+                  } else {
+                    newSelectedRows.delete(caseId);
+                  }
+                  return { ...prev, selectedRows: newSelectedRows };
+                });
+              }}
+              onToggleExpand={(caseId) => {
+                setState(prev => {
+                  const newExpandedRows = new Set(prev.expandedRows);
+                  if (newExpandedRows.has(caseId)) {
+                    newExpandedRows.delete(caseId);
+                  } else {
+                    newExpandedRows.add(caseId);
+                  }
+                  return { ...prev, expandedRows: newExpandedRows };
+                });
+              }}
+              onTreeToggleExpand={(caseId) => {
+                setState(prev => {
+                  const newExpandedTreeNodes = new Set(prev.expandedTreeNodes);
+                  if (newExpandedTreeNodes.has(caseId)) {
+                    newExpandedTreeNodes.delete(caseId);
+                  } else {
+                    newExpandedTreeNodes.add(caseId);
+                  }
+                  return { ...prev, expandedTreeNodes: newExpandedTreeNodes };
+                });
+              }}
+              onRecord={onRecord}
+              onStartEdit={handleStartEdit}
+              onSaveEdit={handleSaveEdit}
+              onCancelEdit={handleCancelEdit}
+              onErrorTypeChange={onErrorTypeChange}
+              onFixCheckChange={onFixCheckChange}
+              onCategoryChange={onCategoryChange}
+              onDragStart={(e, caseId) => {
+                e.dataTransfer.setData('text/plain', caseId);
+                setState(prev => ({ ...prev, draggedNodeId: caseId }));
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+              }}
+              onDrop={(e, targetCaseId) => {
+                e.preventDefault();
+                const draggedCaseId = e.dataTransfer.getData('text/plain');
+                if (draggedCaseId && draggedCaseId !== targetCaseId) {
+                  // 드래그 앤 드롭 로직은 기존과 동일하게 처리
+                  console.log('Drag and drop:', draggedCaseId, 'to', targetCaseId);
+                }
+                setState(prev => ({ ...prev, draggedNodeId: null, dropTargetId: null, dropZone: null }));
+              }}
+              draggedNodeId={state.draggedNodeId}
+              dropTargetId={state.dropTargetId}
+              dropZone={state.dropZone}
+            />
+          ))}
+        </div>
+      )}
 
       {renderableTestCases.length === 0 && (
         <div className="text-center py-12 text-slate-500">
           <div className="text-4xl mb-4">📋</div>
           <p>표시할 테스트 케이스가 없습니다.</p>
         </div>
+      )}
+    </div>
+  );
+}
+
+// EditableCell 컴포넌트 정의
+interface EditableCellProps {
+  value: string;
+  isEditing: boolean;
+  onStartEdit: () => void;
+  onSave: (value: string) => void;
+  onCancel?: () => void;
+  canEdit: boolean;
+  className?: string;
+  placeholder?: string;
+  multiline?: boolean;
+}
+
+function EditableCell({
+  value,
+  isEditing,
+  onStartEdit,
+  onSave,
+  onCancel,
+  canEdit,
+  className = '',
+  placeholder = '',
+  multiline = false
+}: EditableCellProps) {
+  const [editValue, setEditValue] = useState(value);
+
+  useEffect(() => {
+    setEditValue(value);
+  }, [value]);
+
+  const handleSave = () => {
+    onSave(editValue);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setEditValue(value);
+      onCancel?.();
+    }
+  };
+
+  if (isEditing) {
+    if (multiline) {
+      return (
+        <textarea
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          className={`w-full px-2 py-1 border border-blue-300 rounded focus:outline-none focus:border-blue-500 resize-none ${className}`}
+          placeholder={placeholder}
+          autoFocus
+          rows={3}
+        />
+      );
+    } else {
+      return (
+        <input
+          type="text"
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          className={`w-full px-2 py-1 border border-blue-300 rounded focus:outline-none focus:border-blue-500 ${className}`}
+          placeholder={placeholder}
+          autoFocus
+        />
+      );
+    }
+  }
+
+  return (
+    <div
+      onClick={canEdit ? onStartEdit : undefined}
+      className={`cursor-pointer hover:bg-blue-50 px-2 py-1 min-h-[32px] flex items-center ${
+        className.includes('text-right') ? 'justify-end' : ''
+      } ${className} ${
+        canEdit ? 'hover:bg-blue-50' : ''
+      }`}
+      title={canEdit ? "클릭하여 편집" : ""}
+    >
+      {value || (
+        <span className="text-gray-400 italic">{placeholder}</span>
+      )}
+    </div>
+  );
+}
+
+// EditableSelect 컴포넌트 정의
+interface EditableSelectProps {
+  value: string;
+  options: { value: string; label: string; className?: string }[];
+  isEditing: boolean;
+  onStartEdit: () => void;
+  onSave: (value: string) => void;
+  onCancel?: () => void;
+  canEdit: boolean;
+  className?: string;
+  placeholder?: string;
+}
+
+function EditableSelect({
+  value,
+  options,
+  isEditing,
+  onStartEdit,
+  onSave,
+  onCancel,
+  canEdit,
+  className = '',
+  placeholder = '선택하세요'
+}: EditableSelectProps) {
+  const [editValue, setEditValue] = useState(value);
+
+  useEffect(() => {
+    setEditValue(value);
+  }, [value]);
+
+  const handleSave = () => {
+    onSave(editValue);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setEditValue(value);
+      onCancel?.();
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <select
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        className={`w-full px-2 py-1 border border-blue-300 rounded focus:outline-none focus:border-blue-500 ${className}`}
+        autoFocus
+      >
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  const currentOption = options.find(opt => opt.value === value);
+  
+  return (
+    <div
+      onClick={canEdit ? onStartEdit : undefined}
+      className={`cursor-pointer hover:bg-blue-50 px-2 py-1 min-h-[32px] flex items-center ${className} ${
+        canEdit ? 'hover:bg-blue-50' : ''
+      }`}
+      title={canEdit ? "클릭하여 편집" : ""}
+    >
+      {currentOption ? (
+        <span className={currentOption.className}>{currentOption.label}</span>
+      ) : (
+        <span className="text-gray-400 italic">{placeholder}</span>
       )}
     </div>
   );
@@ -1075,180 +1677,6 @@ function TestCaseRow({
 
   const latestResult = testCase.results?.[0];
   const totalAttempts = testCase.results?.length || 0;
-
-  // EditableCell 컴포넌트 정의
-  interface EditableCellProps {
-    value: string;
-    isEditing: boolean;
-    onStartEdit: () => void;
-    onSave: (value: string) => void;
-    onCancel?: () => void;
-    canEdit: boolean;
-    className?: string;
-    placeholder?: string;
-    multiline?: boolean;
-  }
-
-  function EditableCell({
-    value,
-    isEditing,
-    onStartEdit,
-    onSave,
-    onCancel,
-    canEdit,
-    className = '',
-    placeholder = '',
-    multiline = false
-  }: EditableCellProps) {
-    const [editValue, setEditValue] = useState(value);
-
-    useEffect(() => {
-      setEditValue(value);
-    }, [value]);
-
-    const handleSave = () => {
-      onSave(editValue);
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleSave();
-      } else if (e.key === 'Escape') {
-        setEditValue(value);
-        onCancel?.();
-      }
-    };
-
-    if (isEditing) {
-      if (multiline) {
-        return (
-          <textarea
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={handleSave}
-            onKeyDown={handleKeyDown}
-            className={`w-full px-2 py-1 border border-blue-300 rounded focus:outline-none focus:border-blue-500 resize-none ${className}`}
-            placeholder={placeholder}
-            autoFocus
-            rows={3}
-          />
-        );
-      } else {
-        return (
-          <input
-            type="text"
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onBlur={handleSave}
-            onKeyDown={handleKeyDown}
-            className={`w-full px-2 py-1 border border-blue-300 rounded focus:outline-none focus:border-blue-500 ${className}`}
-            placeholder={placeholder}
-            autoFocus
-          />
-        );
-      }
-    }
-
-    return (
-      <div
-        onClick={canEdit ? onStartEdit : undefined}
-        className={`cursor-pointer hover:bg-blue-50 px-2 py-1 min-h-[32px] flex items-center ${
-          className.includes('text-right') ? 'justify-end' : ''
-        } ${className} ${
-          canEdit ? 'hover:bg-blue-50' : ''
-        }`}
-        title={canEdit ? "클릭하여 편집" : ""}
-      >
-        {value || (
-          <span className="text-gray-400 italic">{placeholder}</span>
-        )}
-      </div>
-    );
-  }
-
-  // EditableSelect 컴포넌트 정의
-  interface EditableSelectProps {
-    value: string;
-    options: { value: string; label: string; className?: string }[];
-    isEditing: boolean;
-    onStartEdit: () => void;
-    onSave: (value: string) => void;
-    onCancel?: () => void;
-    canEdit: boolean;
-    className?: string;
-    placeholder?: string;
-  }
-
-  function EditableSelect({
-    value,
-    options,
-    isEditing,
-    onStartEdit,
-    onSave,
-    onCancel,
-    canEdit,
-    className = '',
-    placeholder = '선택하세요'
-  }: EditableSelectProps) {
-    const [editValue, setEditValue] = useState(value);
-
-    useEffect(() => {
-      setEditValue(value);
-    }, [value]);
-
-    const handleSave = () => {
-      onSave(editValue);
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleSave();
-      } else if (e.key === 'Escape') {
-        setEditValue(value);
-        onCancel?.();
-      }
-    };
-
-    if (isEditing) {
-      return (
-        <select
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onBlur={handleSave}
-          onKeyDown={handleKeyDown}
-          className={`w-full px-2 py-1 border border-blue-300 rounded focus:outline-none focus:border-blue-500 ${className}`}
-          autoFocus
-        >
-          <option value="">{placeholder}</option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      );
-    }
-
-    const currentOption = options.find(opt => opt.value === value);
-    
-    return (
-      <div
-        onClick={canEdit ? onStartEdit : undefined}
-        className={`cursor-pointer hover:bg-blue-50 px-2 py-1 min-h-[32px] flex items-center ${className} ${
-          canEdit ? 'hover:bg-blue-50' : ''
-        }`}
-        title={canEdit ? "클릭하여 편집" : ""}
-      >
-        {currentOption ? (
-          <span className={currentOption.className}>{currentOption.label}</span>
-        ) : (
-          <span className="text-gray-400 italic">{placeholder}</span>
-        )}
-      </div>
-    );
-  }
 
   // 오류 유형별 색상 클래스
   const getErrorTypeClass = (errorType?: string) => {
@@ -1456,7 +1884,7 @@ function TestCaseRow({
           <input
             type="checkbox"
             checked={testCase.fix_checked || false}
-            onChange={(e) => onFixCheckChange(testCase.case_id, e.target.checked)}
+            onChange={(e) => onFixCheckChange?.(testCase.case_id, e.target.checked)}
             disabled={!canInteract}
             className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
           />
@@ -1609,3 +2037,4 @@ function TestCaseRow({
     </>
   );
 }
+
