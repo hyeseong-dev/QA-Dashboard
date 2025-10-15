@@ -1,12 +1,23 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { TestCase } from '@/types';
+import { requireAuth } from '@/lib/auth';
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
+    // Validate session
+    try {
+      await requireAuth(request);
+    } catch (error) {
+      return NextResponse.json(
+        { error: '인증이 필요합니다.' },
+        { status: 401 }
+      );
+    }
+    
     const { projectId } = await params;
     
     // Get test cases for the project with category information

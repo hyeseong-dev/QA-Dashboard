@@ -29,11 +29,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const checkAuth = async () => {
+  const checkAuth = async (skipLoading = false) => {
     try {
+      if (!skipLoading) setLoading(true);
+      
       const token = localStorage.getItem('auth_token');
       if (!token) {
-        setLoading(false);
+        setUser(null);
         return;
       }
 
@@ -45,17 +47,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (response.ok) {
         const userData = await response.json();
-        setUser(userData);
+        // 폴링 시에는 사용자 정보가 실제로 변경된 경우에만 업데이트
+        if (!skipLoading || JSON.stringify(userData) !== JSON.stringify(user)) {
+          setUser(userData);
+        }
       } else {
+        // 세션이 만료되었거나 로그아웃된 경우
         localStorage.removeItem('auth_token');
-        setUser(null);
+        
+        // 폴링 중 세션이 만료된 경우 사용자에게 알림
+        if (skipLoading && user) {
+          console.log('Session expired - logged out automatically');
+          setUser(null);
+        } else if (!skipLoading) {
+          setUser(null);
+        }
       }
     } catch (error) {
       console.error('Auth check failed:', error);
-      localStorage.removeItem('auth_token');
-      setUser(null);
+      if (!skipLoading) {
+        localStorage.removeItem('auth_token');
+        setUser(null);
+      }
     } finally {
-      setLoading(false);
+      if (!skipLoading) setLoading(false);
     }
   };
 
@@ -109,13 +124,44 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('auth_token');
-    setUser(null);
+  const logout = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      
+      if (token) {
+        // Call logout API to deactivate session
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Always clear local storage and state
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('saved_email');
+      localStorage.removeItem('saved_password');
+      setUser(null);
+    }
   };
 
   useEffect(() => {
+    // 초기 인증 체크
     checkAuth();
+    
+    // 5초마다 세션 상태 확인 (로그인된 경우에만)
+    const interval = setInterval(() => {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        // 폴링 시에는 로딩 상태를 건너뜀
+        checkAuth(true);
+      }
+    }, 5000); // 5초
+    
+    return () => clearInterval(interval);
   }, []);
 
   const value = {

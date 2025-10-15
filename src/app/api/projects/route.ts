@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { Project } from '@/types';
+import { requireAuth } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // Validate session
+    try {
+      await requireAuth(request);
+    } catch (error) {
+      return NextResponse.json(
+        { error: '인증이 필요합니다.' },
+        { status: 401 }
+      );
+    }
     const result = await query(
       'SELECT project_id, project_name, description, status FROM projects ORDER BY project_name'
     );
@@ -21,6 +31,15 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // Validate session
+    try {
+      await requireAuth(request);
+    } catch (error) {
+      return NextResponse.json(
+        { error: '인증이 필요합니다.' },
+        { status: 401 }
+      );
+    }
     const body = await request.json();
     const { project_id, project_name, description, status } = body;
     

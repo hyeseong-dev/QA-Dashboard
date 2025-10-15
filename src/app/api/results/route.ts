@@ -1,9 +1,19 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { CreateTestResultRequest } from '@/types';
+import { requireAuth } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
+    // Validate session
+    const user = await requireAuth(request).catch(() => null);
+    if (!user) {
+      return NextResponse.json(
+        { error: '인증이 필요합니다.' },
+        { status: 401 }
+      );
+    }
+    
     const body: CreateTestResultRequest = await request.json();
     const { case_id, user_id, status, environment, notes, bug_id } = body;
     

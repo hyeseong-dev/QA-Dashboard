@@ -59,7 +59,14 @@ export default function Dashboard({ projectId, onBackToProjects }: DashboardProp
 
   const loadProject = async () => {
     try {
-      const response = await fetch('/api/projects');
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+      
+      const response = await fetch('/api/projects', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         const foundProject = data.find((p: Project) => p.project_id === projectId);
@@ -79,7 +86,14 @@ export default function Dashboard({ projectId, onBackToProjects }: DashboardProp
     if (!projectId) return;
     
     try {
-      const response = await fetch(`/api/projects/${projectId}/cases`);
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+      
+      const response = await fetch(`/api/projects/${projectId}/cases`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         setTestCases(data);
@@ -91,9 +105,15 @@ export default function Dashboard({ projectId, onBackToProjects }: DashboardProp
 
   const postNewResult = async (resultData: CreateTestResultRequest) => {
     try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+      
       const response = await fetch('/api/results', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(resultData)
       });
       

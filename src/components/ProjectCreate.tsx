@@ -61,10 +61,18 @@ export default function ProjectCreate({ onBack, onProjectCreated }: ProjectCreat
 
     setIsSubmitting(true);
     try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        setErrors({ project_id: '로그인이 필요합니다.' });
+        setIsSubmitting(false);
+        return;
+      }
+      
       const response = await fetch('/api/projects', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(formData),
       });

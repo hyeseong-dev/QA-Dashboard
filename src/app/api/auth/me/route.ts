@@ -19,6 +19,23 @@ export async function GET(request: Request) {
     // Verify JWT token
     const decoded = verify(token, JWT_SECRET) as any;
     
+    // Check if session is still active in database
+    const sessionResult = await query(
+      `SELECT * FROM sessions 
+       WHERE user_id = $1 
+         AND token = $2 
+         AND is_active = true 
+         AND expires_at > CURRENT_TIMESTAMP`,
+      [decoded.userId, decoded.sessionToken]
+    );
+
+    if (sessionResult.rows.length === 0) {
+      return NextResponse.json(
+        { error: '세션이 만료되었거나 로그아웃되었습니다.' },
+        { status: 401 }
+      );
+    }
+    
     // Get fresh user data from database
     const userResult = await query(
       'SELECT user_id, email, user_name, role FROM users WHERE user_id = $1',

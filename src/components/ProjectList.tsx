@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Project } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -18,6 +19,7 @@ export default function ProjectList({ onProjectSelect, onCreateProject }: Projec
   const [error, setError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<SortField>('project_name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const router = useRouter();
   
   // 인증 컨텍스트에서 사용자 정보 가져오기
   const { user } = useAuth();
@@ -56,10 +58,26 @@ export default function ProjectList({ onProjectSelect, onCreateProject }: Projec
   const loadProjects = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/projects');
+      
+      // 인증 토큰 가져오기
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        setError('로그인이 필요합니다.');
+        setLoading(false);
+        return;
+      }
+      
+      const response = await fetch('/api/projects', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
       if (response.ok) {
         const data = await response.json();
         setProjects(data);
+      } else if (response.status === 401) {
+        setError('인증이 만료되었습니다. 다시 로그인해주세요.');
       } else {
         setError('프로젝트 목록을 불러오는데 실패했습니다.');
       }
@@ -80,52 +98,39 @@ export default function ProjectList({ onProjectSelect, onCreateProject }: Projec
   };
 
 
-  // 프로젝트 상태 토글 함수
-  const toggleProjectStatus = async (projectId: string, currentStatus: string) => {
+  // 프로젝트 업데이트 함수
+  const updateProject = async (projectId: string, field: 'project_name' | 'description' | 'status', value: string) => {
     if (!isAdminMode) return;
     
-    const newStatus = currentStatus === 'Active' ? 'Archived' : 'Active';
-    const confirmMessage = newStatus === 'Archived' 
-      ? '이 프로젝트를 비활성화하시겠습니까?' 
-      : '이 프로젝트를 활성화하시겠습니까?';
-    
-    if (!window.confirm(confirmMessage)) return;
-    
     try {
-      const response = await fetch(`/api/projects/${projectId}/status`, {
+      const response = await fetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
         },
         body: JSON.stringify({
-          status: newStatus
+          [field]: value
         })
       });
       
       if (response.ok) {
-        const result = await response.json();
+        const updatedProject = await response.json();
         // 프로젝트 목록 업데이트
         setProjects(prevProjects => 
           prevProjects.map(project => 
             project.project_id === projectId 
-              ? { ...project, status: newStatus }
+              ? updatedProject
               : project
           )
         );
-        
-        const statusText = newStatus === 'Active' ? '활성화' : '비활성화';
-        alert(`프로젝트가 성공적으로 ${statusText}되었습니다.`);
       } else {
         const errorData = await response.json();
-        alert(`상태 변경 실패: ${errorData.error}`);
+        alert(`업데이트 실패: ${errorData.error}`);
       }
     } catch (error) {
-      console.error('Error toggling project status:', error);
-      alert('프로젝트 상태 변경 중 오류가 발생했습니다.');
+      console.error('Error updating project:', error);
+      alert('프로젝트 업데이트 중 오류가 발생했습니다.');
     }
   };
 
@@ -262,16 +267,24 @@ export default function ProjectList({ onProjectSelect, onCreateProject }: Projec
                   
                   {/* 관리자 모드 토글 - Admin 사용자에게만 표시 */}
                   {isAdminUser && (
-                    <button
-                      onClick={handleAdminModeToggle}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                        isAdminMode 
-                          ? 'bg-red-100 text-red-700 hover:bg-red-200' 
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {isAdminMode ? '🔓 관리자 모드' : '🔒 관리자 모드'}
-                    </button>
+                    <>
+                      <button
+                        onClick={handleAdminModeToggle}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                          isAdminMode 
+                            ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {isAdminMode ? '🔓 관리자 모드' : '🔒 관리자 모드'}
+                      </button>
+                      <button
+                        onClick={() => router.push('/users')}
+                        className="px-3 py-1 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
+                      >
+                        👥 사용자 관리
+                      </button>
+                    </>
                   )}
                 </div>
                 
@@ -296,7 +309,7 @@ export default function ProjectList({ onProjectSelect, onCreateProject }: Projec
                       project={project}
                       onSelect={() => onProjectSelect(project.project_id)}
                       isAdminMode={isAdminMode}
-                      onToggleStatus={toggleProjectStatus}
+                      onUpdateProject={updateProject}
                     />
                   ))}
                 </div>
@@ -350,7 +363,7 @@ export default function ProjectList({ onProjectSelect, onCreateProject }: Projec
                             onSelect={() => onProjectSelect(project.project_id)}
                             isEven={index % 2 === 0}
                             isAdminMode={isAdminMode}
-                            onToggleStatus={toggleProjectStatus}
+                            onUpdateProject={updateProject}
                           />
                         ))}
                       </tbody>
@@ -436,10 +449,52 @@ interface ProjectTableRowProps {
   onSelect: () => void;
   isEven: boolean;
   isAdminMode: boolean;
-  onToggleStatus: (projectId: string, currentStatus: string) => void;
+  onUpdateProject: (projectId: string, field: 'project_name' | 'description' | 'status', value: string) => void;
 }
 
-function ProjectTableRow({ project, onSelect, isEven, isAdminMode, onToggleStatus }: ProjectTableRowProps) {
+function ProjectTableRow({ project, onSelect, isEven, isAdminMode, onUpdateProject }: ProjectTableRowProps) {
+  const [editingField, setEditingField] = useState<'name' | 'description' | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editingField && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingField]);
+
+  const handleEdit = (field: 'name' | 'description') => {
+    if (!isAdminMode) return;
+    setEditingField(field);
+    setEditValue(field === 'name' ? project.project_name : project.description || '');
+  };
+
+  const handleSave = async () => {
+    const field = editingField === 'name' ? 'project_name' : 'description';
+    await onUpdateProject(project.project_id, field, editValue);
+    setEditingField(null);
+  };
+
+  const handleCancel = () => {
+    setEditingField(null);
+    setEditValue('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && editingField === 'name') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      handleCancel();
+    }
+  };
+
+  const toggleStatus = () => {
+    if (!isAdminMode) return;
+    const newStatus = project.status === 'Active' ? 'Archived' : 'Active';
+    onUpdateProject(project.project_id, 'status', newStatus);
+  };
+
   return (
     <tr className={`hover:bg-slate-50 transition-colors ${isEven ? 'bg-white' : 'bg-slate-25'}`}>
       <td className="px-6 py-4 whitespace-nowrap">
@@ -449,49 +504,78 @@ function ProjectTableRow({ project, onSelect, isEven, isAdminMode, onToggleStatu
       </td>
       <td className="px-6 py-4">
         <div className="text-sm font-semibold text-slate-900">
-          {project.project_name}
+          {editingField === 'name' ? (
+            <input
+              ref={inputRef as React.RefObject<HTMLInputElement>}
+              type="text"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSave}
+              onKeyDown={handleKeyDown}
+              className="w-full px-0 py-0 text-sm font-semibold text-slate-900 bg-transparent border-0 border-b-2 border-blue-500 focus:outline-none focus:ring-0"
+              autoFocus
+            />
+          ) : (
+            <span
+              className={isAdminMode ? 'cursor-pointer hover:text-blue-600' : ''}
+              onClick={() => handleEdit('name')}
+              title={isAdminMode ? '클릭하여 수정' : ''}
+            >
+              {project.project_name}
+            </span>
+          )}
         </div>
       </td>
       <td className="px-6 py-4">
         <div className="text-sm text-slate-600 max-w-md">
-          {project.description || (
-            <span className="italic text-slate-400">설명 없음</span>
+          {editingField === 'description' ? (
+            <textarea
+              ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={handleSave}
+              onKeyDown={handleKeyDown}
+              className="w-full px-0 py-0 text-sm text-slate-600 bg-transparent border-0 border-b-2 border-blue-500 focus:outline-none focus:ring-0 resize-none"
+              rows={1}
+              autoFocus
+            />
+          ) : (
+            <span
+              className={isAdminMode ? 'cursor-pointer hover:text-blue-600' : ''}
+              onClick={() => handleEdit('description')}
+              title={isAdminMode ? '클릭하여 수정' : ''}
+            >
+              {project.description || (
+                <span className="italic text-slate-400">설명 없음</span>
+              )}
+            </span>
           )}
         </div>
       </td>
       <td className="px-6 py-4 whitespace-nowrap">
-        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-          project.status === 'Active'
-            ? 'bg-green-100 text-green-800'
-            : 'bg-gray-100 text-gray-800'
-        }`}>
+        <span 
+          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+            project.status === 'Active'
+              ? 'bg-green-100 text-green-800'
+              : 'bg-gray-100 text-gray-800'
+          } ${
+            isAdminMode ? 'cursor-pointer hover:opacity-80' : ''
+          }`}
+          onClick={toggleStatus}
+          title={isAdminMode ? '클릭하여 상태 변경' : ''}
+        >
           {project.status === 'Active' ? '🟢 활성' : '⚪ 비활성'}
         </span>
       </td>
       <td className="px-6 py-4 text-right">
-        <div className="flex items-center justify-end gap-2">
-          {isAdminMode && (
-            <button
-              onClick={() => onToggleStatus(project.project_id, project.status)}
-              className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded transition-colors ${
-                project.status === 'Active'
-                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                  : 'bg-green-100 text-green-700 hover:bg-green-200'
-              }`}
-              title={project.status === 'Active' ? '프로젝트 비활성화' : '프로젝트 활성화'}
-            >
-              {project.status === 'Active' ? '⏸️ 비활성화' : '▶️ 활성화'}
-            </button>
-          )}
-          <button
-            onClick={onSelect}
-            className="inline-flex items-center px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors"
-            disabled={project.status !== 'Active'}
-          >
-            <span className="mr-1">🚀</span>
-            대시보드 진입
-          </button>
-        </div>
+        <button
+          onClick={onSelect}
+          className="inline-flex items-center px-3 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={project.status !== 'Active'}
+        >
+          <span className="mr-1">🚀</span>
+          시작
+        </button>
       </td>
     </tr>
   );
@@ -501,10 +585,52 @@ interface ProjectCardProps {
   project: Project;
   onSelect: () => void;
   isAdminMode: boolean;
-  onToggleStatus: (projectId: string, currentStatus: string) => void;
+  onUpdateProject: (projectId: string, field: 'project_name' | 'description' | 'status', value: string) => void;
 }
 
-function ProjectCard({ project, onSelect, isAdminMode, onToggleStatus }: ProjectCardProps) {
+function ProjectCard({ project, onSelect, isAdminMode, onUpdateProject }: ProjectCardProps) {
+  const [editingField, setEditingField] = useState<'name' | 'description' | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (editingField && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingField]);
+
+  const handleEdit = (field: 'name' | 'description') => {
+    if (!isAdminMode) return;
+    setEditingField(field);
+    setEditValue(field === 'name' ? project.project_name : project.description || '');
+  };
+
+  const handleSave = async () => {
+    const field = editingField === 'name' ? 'project_name' : 'description';
+    await onUpdateProject(project.project_id, field, editValue);
+    setEditingField(null);
+  };
+
+  const handleCancel = () => {
+    setEditingField(null);
+    setEditValue('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && editingField === 'name') {
+      handleSave();
+    } else if (e.key === 'Escape') {
+      handleCancel();
+    }
+  };
+
+  const toggleStatus = () => {
+    if (!isAdminMode) return;
+    const newStatus = project.status === 'Active' ? 'Archived' : 'Active';
+    onUpdateProject(project.project_id, 'status', newStatus);
+  };
+
   return (
     <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start mb-3">
@@ -513,43 +639,74 @@ function ProjectCard({ project, onSelect, isAdminMode, onToggleStatus }: Project
             {project.project_id}
           </div>
           <h3 className="text-lg font-semibold text-slate-900 mb-1">
-            {project.project_name}
+            {editingField === 'name' ? (
+              <input
+                ref={inputRef as React.RefObject<HTMLInputElement>}
+                type="text"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={handleSave}
+                onKeyDown={handleKeyDown}
+                className="w-full px-0 py-0 text-lg font-semibold text-slate-900 bg-transparent border-0 border-b-2 border-blue-500 focus:outline-none focus:ring-0"
+                autoFocus
+              />
+            ) : (
+              <span
+                className={isAdminMode ? 'cursor-pointer hover:text-blue-600' : ''}
+                onClick={() => handleEdit('name')}
+                title={isAdminMode ? '클릭하여 수정' : ''}
+              >
+                {project.project_name}
+              </span>
+            )}
           </h3>
         </div>
-        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-          project.status === 'Active'
-            ? 'bg-green-100 text-green-800'
-            : 'bg-gray-100 text-gray-800'
-        }`}>
+        <span 
+          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+            project.status === 'Active'
+              ? 'bg-green-100 text-green-800'
+              : 'bg-gray-100 text-gray-800'
+          } ${
+            isAdminMode ? 'cursor-pointer hover:opacity-80' : ''
+          }`}
+          onClick={toggleStatus}
+          title={isAdminMode ? '클릭하여 상태 변경' : ''}
+        >
           {project.status === 'Active' ? '🟢 활성' : '⚪ 비활성'}
         </span>
       </div>
       
-      <p className="text-sm text-slate-600 mb-4 line-clamp-2">
-        {project.description || (
-          <span className="italic text-slate-400">설명 없음</span>
+      <div className="text-sm text-slate-600 mb-4">
+        {editingField === 'description' ? (
+          <textarea
+            ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={handleSave}
+            onKeyDown={handleKeyDown}
+            className="w-full px-0 py-0 text-sm text-slate-600 bg-transparent border-0 border-b-2 border-blue-500 focus:outline-none focus:ring-0 resize-none"
+            rows={2}
+            autoFocus
+          />
+        ) : (
+          <span
+            className={`line-clamp-2 ${
+              isAdminMode ? 'cursor-pointer hover:text-blue-600' : ''
+            }`}
+            onClick={() => handleEdit('description')}
+            title={isAdminMode ? '클릭하여 수정' : ''}
+          >
+            {project.description || (
+              <span className="italic text-slate-400">설명 없음</span>
+            )}
+          </span>
         )}
-      </p>
+      </div>
       
       <div className="flex gap-2">
-        {isAdminMode && (
-          <button
-            onClick={() => onToggleStatus(project.project_id, project.status)}
-            className={`flex-1 inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-              project.status === 'Active'
-                ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                : 'bg-green-100 text-green-700 hover:bg-green-200'
-            }`}
-            title={project.status === 'Active' ? '프로젝트 비활성화' : '프로젝트 활성화'}
-          >
-            {project.status === 'Active' ? '⏸️ 비활성화' : '▶️ 활성화'}
-          </button>
-        )}
         <button
           onClick={onSelect}
-          className={`inline-flex items-center justify-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-            isAdminMode ? 'flex-1' : 'w-full'
-          }`}
+          className="w-full inline-flex items-center justify-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={project.status !== 'Active'}
         >
           <span className="mr-2">🚀</span>

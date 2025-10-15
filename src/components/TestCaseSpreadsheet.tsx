@@ -1542,7 +1542,7 @@ function EditableSelect({
   onCancel,
   canEdit,
   className = '',
-  placeholder = '선택하세요'
+  placeholder = '선택'
 }: EditableSelectProps) {
   const [editValue, setEditValue] = useState(value);
 
@@ -1859,7 +1859,7 @@ function TestCaseRow({
             onCancel={onCancelEdit}
             canEdit={canInteract}
             className={`text-xs px-2 py-1 rounded font-semibold ${getPriorityClass(testCase.priority)}`}
-            displayValue={testCase.priority || '선택'}
+            displayValue={testCase.priority || ''}
           />
         </td>
 

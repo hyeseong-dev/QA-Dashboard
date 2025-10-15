@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSearchParams } from 'next/navigation';
 
 interface LoginFormProps {
   onSwitchToSignup: () => void;
@@ -9,12 +10,35 @@ interface LoginFormProps {
 
 export default function LoginForm({ onSwitchToSignup }: LoginFormProps) {
   const { login } = useAuth();
+  const searchParams = useSearchParams();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   });
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [timeoutMessage, setTimeoutMessage] = useState('');
+
+  // Load saved credentials on component mount
+  useEffect(() => {
+    // Check for timeout message
+    if (searchParams.get('reason') === 'timeout') {
+      setTimeoutMessage('세션이 만료되어 로그아웃되었습니다. 다시 로그인해주세요.');
+    }
+
+    const savedEmail = localStorage.getItem('saved_email');
+    const savedPassword = localStorage.getItem('saved_password');
+    const savedRememberMe = localStorage.getItem('remember_me') === 'true';
+    
+    if (savedRememberMe && savedEmail && savedPassword) {
+      setFormData({
+        email: savedEmail,
+        password: savedPassword
+      });
+      setRememberMe(true);
+    }
+  }, [searchParams]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -31,7 +55,19 @@ export default function LoginForm({ onSwitchToSignup }: LoginFormProps) {
 
     const result = await login(formData.email, formData.password);
     
-    if (!result.success) {
+    if (result.success) {
+      // Save credentials if remember me is checked
+      if (rememberMe) {
+        localStorage.setItem('saved_email', formData.email);
+        localStorage.setItem('saved_password', formData.password);
+        localStorage.setItem('remember_me', 'true');
+      } else {
+        // Clear saved credentials if unchecked
+        localStorage.removeItem('saved_email');
+        localStorage.removeItem('saved_password');
+        localStorage.removeItem('remember_me');
+      }
+    } else {
       setError(result.error || '로그인에 실패했습니다.');
     }
     
@@ -45,6 +81,12 @@ export default function LoginForm({ onSwitchToSignup }: LoginFormProps) {
           <h1 className="text-3xl font-bold text-slate-900 mb-2">로그인</h1>
           <p className="text-slate-600">QA 대시보드에 로그인하세요</p>
         </div>
+
+        {timeoutMessage && (
+          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-sm text-yellow-800">{timeoutMessage}</p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
@@ -79,6 +121,20 @@ export default function LoginForm({ onSwitchToSignup }: LoginFormProps) {
               placeholder="비밀번호를 입력하세요"
               disabled={loading}
             />
+          </div>
+
+          <div className="flex items-center">
+            <input
+              id="remember-me"
+              name="remember-me"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="remember-me" className="ml-2 block text-sm text-slate-700">
+              로그인 정보 저장
+            </label>
           </div>
 
           {error && (

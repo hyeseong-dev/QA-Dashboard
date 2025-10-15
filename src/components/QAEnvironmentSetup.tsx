@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { User } from '@/types';
 import { useQAEnvironment } from '@/contexts/QAEnvironmentContext';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -12,10 +11,8 @@ interface QAEnvironmentSetupProps {
 export default function QAEnvironmentSetup({ onSetupComplete }: QAEnvironmentSetupProps) {
   const { setQAEnvironment } = useQAEnvironment();
   const { user } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    userId: user?.user_id || '',
     os: '',
     device: '',
     version: ''
@@ -37,39 +34,15 @@ export default function QAEnvironmentSetup({ onSetupComplete }: QAEnvironmentSet
     };
   }, []);
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      setFormData(prev => ({ ...prev, userId: user.user_id }));
-    }
-  }, [user]);
-
-  const loadUsers = async () => {
-    try {
-      const response = await fetch('/api/users');
-      if (response.ok) {
-        const data = await response.json();
-        setUsers(data);
-      }
-    } catch (error) {
-      console.error('Error loading users:', error);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.userId || !formData.os) return;
+    if (!user || !formData.os) return;
 
     setLoading(true);
     
-    const selectedUser = users.find(u => u.user_id === formData.userId);
-    
     const qaEnvironment = {
-      userId: formData.userId,
-      userName: selectedUser?.user_name || '',
+      userId: user.user_id,
+      userName: user.user_name,
       env: {
         os: formData.os,
         device: formData.device,
@@ -98,24 +71,25 @@ export default function QAEnvironmentSetup({ onSetupComplete }: QAEnvironmentSet
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* 테스터 선택 */}
+          {/* 테스터 정보 */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              테스터 <span className="text-red-500">*</span>
+              테스터
             </label>
-            <select 
-              className="w-full p-3 border border-slate-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              value={formData.userId}
-              onChange={(e) => handleInputChange('userId', e.target.value)}
-              required
-            >
-              <option value="">테스터 선택</option>
-              {users.map(user => (
-                <option key={user.user_id} value={user.user_id}>
-                  {user.user_name} ({user.role})
-                </option>
-              ))}
-            </select>
+            <div className="w-full p-3 border border-slate-200 rounded-lg bg-slate-50">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-slate-900">
+                  {user?.user_name || '로딩중...'}
+                </span>
+                <span className={`text-xs px-2 py-1 rounded-full ${
+                  user?.role === 'Admin' 
+                    ? 'bg-purple-100 text-purple-700'
+                    : 'bg-green-100 text-green-700'
+                }`}>
+                  {user?.role === 'Admin' ? '관리자' : '테스터'}
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* OS 선택 */}
@@ -167,7 +141,7 @@ export default function QAEnvironmentSetup({ onSetupComplete }: QAEnvironmentSet
           {/* 제출 버튼 */}
           <button
             type="submit"
-            disabled={!formData.userId || !formData.os || loading}
+            disabled={!user || !formData.os || loading}
             className="w-full bg-blue-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? '설정 중...' : '테스트 시작하기'}
