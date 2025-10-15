@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sign } from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { randomBytes } from 'crypto';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
@@ -41,37 +40,18 @@ export async function POST(request: Request) {
       );
     }
 
-    // 1. Deactivate existing sessions for this user (single session policy)
-    await query(
-      'UPDATE sessions SET is_active = false WHERE user_id = $1 AND is_active = true',
-      [user.user_id]
-    );
-
-    // 2. Generate session token
-    const sessionToken = randomBytes(32).toString('hex');
-    const sessionId = randomBytes(16).toString('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-    // 3. Create new session in database
-    await query(
-      `INSERT INTO sessions (user_id, token, expires_at, last_activity)
-       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)`,
-      [user.user_id, sessionToken, expiresAt]
-    );
-
-    // 4. Update last login time in users table
+    // Update last login time in users table
     await query(
       'UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE user_id = $1',
       [user.user_id]
     );
 
-    // 5. Generate JWT token with session info
+    // Generate JWT token (stateless)
     const token = sign(
       { 
         userId: user.user_id, 
         email: user.email,
-        role: user.role,
-        sessionToken: sessionToken
+        role: user.role
       },
       JWT_SECRET,
       { expiresIn: '24h' }

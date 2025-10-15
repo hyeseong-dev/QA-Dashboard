@@ -1,68 +1,25 @@
 import { verify } from 'jsonwebtoken';
-import { query } from './db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
-export interface SessionUser {
+export interface AuthUser {
   userId: string;
   email: string;
   role: string;
-  sessionToken: string;
 }
 
-export async function validateSession(token: string): Promise<SessionUser | null> {
+export async function validateJWT(token: string): Promise<AuthUser | null> {
   try {
-    // 1. Verify JWT token
-    const decoded = verify(token, JWT_SECRET) as SessionUser;
-    
-    // 2. Check if session exists and is active
-    const sessionResult = await query(
-      `SELECT * FROM sessions 
-       WHERE user_id = $1 
-         AND token = $2 
-         AND is_active = true 
-         AND expires_at > CURRENT_TIMESTAMP`,
-      [decoded.userId, decoded.sessionToken]
-    );
-
-    if (sessionResult.rows.length === 0) {
-      return null;
-    }
-
-    const session = sessionResult.rows[0];
-
-    // 3. Update last activity if it's been more than 5 minutes
-    const lastActivity = new Date(session.last_activity);
-    const now = new Date();
-    const fiveMinutes = 5 * 60 * 1000;
-
-    if (now.getTime() - lastActivity.getTime() > fiveMinutes) {
-      await query(
-        'UPDATE sessions SET last_activity = CURRENT_TIMESTAMP WHERE token = $1',
-        [decoded.sessionToken]
-      );
-    }
-
-    // 4. Check if session has been inactive for more than 30 minutes
-    const thirtyMinutes = 30 * 60 * 1000;
-    const timeDiff = now.getTime() - lastActivity.getTime();
-    
-    if (timeDiff > thirtyMinutes) {
-      // Deactivate session due to inactivity
-      await query(
-        'UPDATE sessions SET is_active = false WHERE token = $1',
-        [decoded.sessionToken]
-      );
-      return null;
-    }
+    // JWT 토큰 검증 (만료 시간도 자동으로 체크됨)
+    const decoded = verify(token, JWT_SECRET) as AuthUser;
     return decoded;
   } catch (error) {
-    console.error('Session validation error:', error);
+    console.error('JWT validation error:', error);
     return null;
   }
 }
 
-export async function requireAuth(request: Request): Promise<SessionUser> {
+export async function requireAuth(request: Request): Promise<AuthUser> {
   const authHeader = request.headers.get('authorization');
   
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -70,10 +27,10 @@ export async function requireAuth(request: Request): Promise<SessionUser> {
   }
 
   const token = authHeader.substring(7);
-  const user = await validateSession(token);
+  const user = await validateJWT(token);
 
   if (!user) {
-    throw new Error('Unauthorized: Invalid or expired session');
+    throw new Error('Unauthorized: Invalid or expired token');
   }
 
   return user;

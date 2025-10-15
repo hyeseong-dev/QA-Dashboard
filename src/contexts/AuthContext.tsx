@@ -10,7 +10,6 @@ interface AuthContextType {
   signup: (userData: SignupData) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   checkAuth: () => Promise<void>;
-  realtimeStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
 }
 
 interface SignupData {
@@ -29,13 +28,6 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [realtimeStatus, setRealtimeStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
-  
-  // SSE 관련 ref
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 5;
 
   const checkAuth = async (skipLoading = false) => {
     try {
@@ -64,12 +56,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         localStorage.removeItem('auth_token');
         
         // 폴링 중 세션이 만료된 경우 사용자에게 알림
-        if (skipLoading && user) {
-          console.log('Session expired - logged out automatically');
-          setUser(null);
-        } else if (!skipLoading) {
-          setUser(null);
-        }
+        setUser(null);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -132,94 +119,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  // SSE 연결 함수
-  const connectToRealtime = () => {
-    const token = localStorage.getItem('auth_token');
-    if (!token || !user) {
-      return;
-    }
-    
-    // 기존 연결 정리
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-    
-    setRealtimeStatus('connecting');
-    
-    try {
-      const eventSource = new EventSource(`/api/realtime?token=${encodeURIComponent(token)}`);
-      
-      eventSource.onopen = () => {
-        console.log('SSE 연결됨');
-        setRealtimeStatus('connected');
-        reconnectAttempts.current = 0;
-      };
-      
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          if (data.type === 'session_change' || data.type === 'user_status_change') {
-            // 세션 변경 시 인증 상태 재확인
-            checkAuth(true);
-            
-            // 사용자 페이지에 실시간 업데이트 알림
-            window.dispatchEvent(new CustomEvent('sse_session_change', { 
-              detail: data 
-            }));
-          } else if (data.type === 'ping') {
-            // Keep-alive ping
-            console.log('SSE ping received');
-          } else if (data.type === 'connected') {
-            console.log('SSE 초기 연결:', data.message);
-          }
-        } catch (error) {
-          console.error('SSE 메시지 파싱 오류:', error);
-        }
-      };
-      
-      eventSource.onerror = (error) => {
-        console.error('SSE 오류:', error);
-        setRealtimeStatus('error');
-        eventSource.close();
-        
-        // 재연결 시도
-        if (reconnectAttempts.current < maxReconnectAttempts) {
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
-          reconnectTimeoutRef.current = setTimeout(() => {
-            reconnectAttempts.current++;
-            console.log(`SSE 재연결 시도 ${reconnectAttempts.current}/${maxReconnectAttempts}`);
-            connectToRealtime();
-          }, delay);
-        } else {
-          console.log('SSE 재연결 포기 - 폴링으로 전환');
-          setRealtimeStatus('disconnected');
-        }
-      };
-      
-      eventSourceRef.current = eventSource;
-      
-    } catch (error) {
-      console.error('SSE 연결 생성 오류:', error);
-      setRealtimeStatus('error');
-    }
-  };
-  
-  // SSE 연결 해제
-  const disconnectFromRealtime = () => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-    
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-    
-    setRealtimeStatus('disconnected');
-    reconnectAttempts.current = 0;
-  };
 
   const logout = async () => {
     try {
@@ -237,9 +136,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // SSE 연결 해제
-      disconnectFromRealtime();
-      
       // Always clear local storage and state
       localStorage.removeItem('auth_token');
       localStorage.removeItem('saved_email');
@@ -253,39 +149,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     checkAuth();
   }, []);
   
-  // 사용자 상태 변경 시 SSE 연결 관리
-  useEffect(() => {
-    if (user) {
-      // 로그인된 경우 SSE 연결 시도
-      connectToRealtime();
-    } else {
-      // 로그아웃된 경우 SSE 연결 해제
-      disconnectFromRealtime();
-    }
-    
-    return () => {
-      disconnectFromRealtime();
-    };
-  }, [user]);
-  
-  // SSE 실패 시 폴백 폴링
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    
-    if (user && realtimeStatus === 'disconnected') {
-      console.log('SSE 연결 실패 - 폴링으로 폴백');
-      interval = setInterval(() => {
-        const token = localStorage.getItem('auth_token');
-        if (token) {
-          checkAuth(true);
-        }
-      }, 10000); // SSE 실패 시 10초 폴링
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [user, realtimeStatus]);
 
   const value = {
     user,
@@ -293,8 +156,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     login,
     signup,
     logout,
-    checkAuth,
-    realtimeStatus
+    checkAuth
   };
 
   return (

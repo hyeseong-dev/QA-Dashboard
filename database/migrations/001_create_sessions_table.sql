@@ -12,12 +12,16 @@ CREATE TABLE sessions (
   token VARCHAR(255) NOT NULL UNIQUE,
   
   -- Time information
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  last_activity TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
   
   -- Status
   is_active BOOLEAN DEFAULT true,
+  
+  -- Client information
+  ip_address INET,
+  user_agent TEXT,
   
   -- Constraints
   CONSTRAINT valid_expiry CHECK (expires_at > created_at)
@@ -26,32 +30,12 @@ CREATE TABLE sessions (
 -- Create indexes for performance
 CREATE INDEX idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX idx_sessions_token ON sessions(token);
-CREATE INDEX idx_sessions_active ON sessions(is_active, expires_at);
-CREATE INDEX idx_sessions_last_activity ON sessions(last_activity);
+CREATE INDEX idx_sessions_active_expires ON sessions(is_active, expires_at);
+CREATE INDEX idx_sessions_user_active ON sessions(user_id, is_active, expires_at) WHERE is_active = true;
 
--- Create view for users with online status
-CREATE OR REPLACE VIEW users_online_status AS
-SELECT 
-  u.*,
-  CASE 
-    WHEN EXISTS (
-      SELECT 1 FROM sessions s 
-      WHERE s.user_id = u.user_id 
-        AND s.is_active = true 
-        AND s.expires_at > CURRENT_TIMESTAMP
-        AND s.last_activity > CURRENT_TIMESTAMP - INTERVAL '30 minutes'
-    ) THEN true 
-    ELSE false 
-  END as is_online,
-  (
-    SELECT MAX(s.last_activity) 
-    FROM sessions s 
-    WHERE s.user_id = u.user_id 
-      AND s.is_active = true
-  ) as last_activity_from_session
-FROM users u;
+-- Create view for users with online status (REMOVED - SSE feature disabled)
 
--- Add comment for documentation
+-- Add comments for documentation
 COMMENT ON TABLE sessions IS 'User session management table for tracking login/logout and online status';
 COMMENT ON COLUMN sessions.session_id IS 'Unique session identifier';
 COMMENT ON COLUMN sessions.user_id IS 'Reference to the user who owns this session';
@@ -59,3 +43,5 @@ COMMENT ON COLUMN sessions.token IS 'Authentication token for this session';
 COMMENT ON COLUMN sessions.last_activity IS 'Last activity timestamp for auto-logout tracking';
 COMMENT ON COLUMN sessions.expires_at IS 'Session expiration timestamp';
 COMMENT ON COLUMN sessions.is_active IS 'Whether the session is currently active';
+COMMENT ON COLUMN sessions.ip_address IS 'Client IP address for security tracking';
+COMMENT ON COLUMN sessions.user_agent IS 'Client user agent string for device tracking';

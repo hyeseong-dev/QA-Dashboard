@@ -9,8 +9,9 @@ import ProjectList from './ProjectList';
 import ProjectCreate from './ProjectCreate';
 import Dashboard from './Dashboard';
 import QAEnvironmentSetup from './QAEnvironmentSetup';
+import UserManagement from './UserManagement';
 
-type AppView = 'project-list' | 'project-create' | 'dashboard';
+type AppView = 'project-list' | 'project-create' | 'dashboard' | 'user-management';
 
 function AppContent() {
   const { isQAEnvironmentConfigured } = useQAEnvironment();
@@ -39,6 +40,10 @@ function AppContent() {
   const handleBackToProjectList = () => {
     setCurrentView('project-list');
     setSelectedProjectId('');
+  };
+
+  const handleUserManagement = () => {
+    setCurrentView('user-management');
   };
 
   const handleQAEnvironmentSetupComplete = () => {
@@ -72,11 +77,19 @@ function AppContent() {
                 />
               );
             
+            case 'user-management':
+              return (
+                <UserManagement 
+                  onBackToProjects={handleBackToProjectList}
+                />
+              );
+            
             default:
               return (
                 <ProjectList 
                   onProjectSelect={handleProjectSelect}
                   onCreateProject={handleCreateProject}
+                  onUserManagement={handleUserManagement}
                 />
               );
           }

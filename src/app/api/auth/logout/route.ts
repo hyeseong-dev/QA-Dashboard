@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
 import { verify } from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
@@ -19,23 +18,17 @@ export async function POST(request: Request) {
     const token = authHeader.substring(7);
     
     try {
-      // Verify and decode token
-      const decoded = verify(token, JWT_SECRET) as any;
-      
-      // Deactivate session in database
-      await query(
-        `UPDATE sessions 
-         SET is_active = false 
-         WHERE user_id = $1 AND token = $2 AND is_active = true`,
-        [decoded.userId, decoded.sessionToken]
-      );
+      // Verify token (JWT-only stateless)
+      verify(token, JWT_SECRET);
 
+      // With JWT-only auth, logout is client-side (remove token from storage)
+      // Server just validates the token was valid
       return NextResponse.json({
         success: true,
         message: '로그아웃 되었습니다.'
       });
       
-    } catch (tokenError) {
+    } catch {
       return NextResponse.json(
         { error: '유효하지 않은 토큰입니다.' },
         { status: 401 }

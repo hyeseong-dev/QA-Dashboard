@@ -8,12 +8,13 @@ import { useAuth } from '@/contexts/AuthContext';
 interface ProjectListProps {
   onProjectSelect: (projectId: string) => void;
   onCreateProject: () => void;
+  onUserManagement: () => void;
 }
 
 type SortField = 'project_id' | 'project_name' | 'status';
 type SortDirection = 'asc' | 'desc';
 
-export default function ProjectList({ onProjectSelect, onCreateProject }: ProjectListProps) {
+export default function ProjectList({ onProjectSelect, onCreateProject, onUserManagement }: ProjectListProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -279,7 +280,7 @@ export default function ProjectList({ onProjectSelect, onCreateProject }: Projec
                         {isAdminMode ? '🔓 관리자 모드' : '🔒 관리자 모드'}
                       </button>
                       <button
-                        onClick={() => router.push('/users')}
+                        onClick={onUserManagement}
                         className="px-3 py-1 rounded-lg text-xs font-semibold bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors"
                       >
                         👥 사용자 관리

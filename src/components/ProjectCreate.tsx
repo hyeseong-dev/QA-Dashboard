@@ -88,7 +88,7 @@ export default function ProjectCreate({ onBack, onProjectCreated }: ProjectCreat
           setErrors({ submit: errorData.error || '프로젝트 생성에 실패했습니다.' });
         }
       }
-    } catch (error) {
+    } catch {
       setErrors({ submit: '서버 연결에 실패했습니다.' });
     } finally {
       setIsSubmitting(false);
@@ -103,25 +103,15 @@ export default function ProjectCreate({ onBack, onProjectCreated }: ProjectCreat
     }
   };
 
-  const generateProjectId = () => {
-    const name = formData.project_name.trim();
-    if (name) {
-      // 프로젝트 이름을 기반으로 ID 생성
-      const id = name
-        .toLowerCase()
-        .replace(/[^a-zA-Z0-9가-힣\s]/g, '') // 특수문자 제거
-        .replace(/\s+/g, '-') // 공백을 하이픈으로
-        .replace(/[가-힣]/g, match => {
-          // 한글을 영문으로 간단 변환 (예시)
-          const korean = '가나다라마바사아자차카타파하';
-          const english = 'gnadramabasaajachkatapaha';
-          const index = korean.indexOf(match);
-          return index !== -1 ? english[index] : match;
-        })
-        .substring(0, 30); // 길이 제한
-      
-      setFormData(prev => ({ ...prev, project_id: id }));
-    }
+  // 프로젝트 ID 실시간 입력 필터링
+  const handleProjectIdChange = (value: string) => {
+    // 공백과 허용되지 않는 문자 실시간 제거
+    const filtered = value
+      .replace(/\s/g, '') // 모든 공백 제거
+      .replace(/[^a-zA-Z0-9-_]/g, '') // 영문, 숫자, 하이픈, 언더스코어만 허용
+      .toLowerCase(); // 소문자 변환
+    
+    handleInputChange('project_id', filtered);
   };
 
   return (
@@ -159,7 +149,6 @@ export default function ProjectCreate({ onBack, onProjectCreated }: ProjectCreat
                   id="project_name"
                   value={formData.project_name}
                   onChange={(e) => handleInputChange('project_name', e.target.value)}
-                  onBlur={generateProjectId}
                   className={`w-full p-3 border rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                     errors.project_name ? 'border-red-500' : 'border-slate-300'
                   }`}
@@ -180,7 +169,7 @@ export default function ProjectCreate({ onBack, onProjectCreated }: ProjectCreat
                   type="text"
                   id="project_id"
                   value={formData.project_id}
-                  onChange={(e) => handleInputChange('project_id', e.target.value)}
+                  onChange={(e) => handleProjectIdChange(e.target.value)}
                   className={`w-full p-3 border rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                     errors.project_id ? 'border-red-500' : 'border-slate-300'
                   }`}
@@ -188,7 +177,7 @@ export default function ProjectCreate({ onBack, onProjectCreated }: ProjectCreat
                   disabled={isSubmitting}
                 />
                 <p className="mt-1 text-xs text-slate-500">
-                  영문, 숫자, 하이픈(-), 언더스코어(_)만 사용 가능. 최대 50자
+                  영문, 숫자, 하이픈(-), 언더스코어(_)만 사용 가능. 공백 불가. 최대 50자
                 </p>
                 {errors.project_id && (
                   <p className="mt-1 text-sm text-red-600">{errors.project_id}</p>

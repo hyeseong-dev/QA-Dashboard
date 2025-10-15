@@ -56,15 +56,21 @@ export async function POST(request: Request) {
 
     const newUser = insertResult.rows[0];
 
-    // Generate JWT token
+    // Update last login time in users table
+    await query(
+      'UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE user_id = $1',
+      [newUser.user_id]
+    );
+
+    // Generate JWT token (stateless)
     const token = sign(
       { 
         userId: newUser.user_id, 
         email: newUser.email,
-        role: newUser.role 
+        role: newUser.role
       },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: '24h' }
     );
 
     return NextResponse.json({

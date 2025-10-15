@@ -86,131 +86,15 @@ CREATE INDEX IF NOT EXISTS idx_sessions_active_expires ON sessions(is_active, ex
 CREATE INDEX IF NOT EXISTS idx_sessions_user_active ON sessions(user_id, is_active, expires_at) 
 WHERE is_active = true;
 
--- 4. 사용자 온라인 상태 뷰 생성
-CREATE OR REPLACE VIEW users_online_status AS
-SELECT 
-    u.user_id,
-    u.user_name,
-    u.email,
-    u.role,
-    u.department,
-    u.position,
-    u.phone,
-    u.profile_image,
-    u.last_login_at,
-    u.created_at,
-    u.updated_at,
-    CASE 
-        WHEN s.user_id IS NOT NULL THEN true 
-        ELSE false 
-    END as is_online
-FROM users u
-LEFT JOIN (
-    SELECT DISTINCT user_id
-    FROM sessions 
-    WHERE is_active = true 
-    AND expires_at > CURRENT_TIMESTAMP
-) s ON u.user_id = s.user_id;
+-- 4. 사용자 온라인 상태 뷰 생성 (제거됨 - SSE 관련)
 
--- 5. 세션 변경 알림 트리거 함수
-CREATE OR REPLACE FUNCTION notify_session_change()
-RETURNS trigger AS $$
-DECLARE
-    notification json;
-BEGIN
-    -- INSERT 또는 UPDATE 처리
-    IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-        notification = json_build_object(
-            'type', 'session_change',
-            'user_id', NEW.user_id,
-            'session_id', NEW.session_id,
-            'is_active', NEW.is_active,
-            'last_activity', NEW.last_activity,
-            'operation', TG_OP,
-            'timestamp', CURRENT_TIMESTAMP
-        );
-        
-        -- 채널에 알림 전송
-        PERFORM pg_notify('session_updates', notification::text);
-        RETURN NEW;
-    END IF;
-    
-    -- DELETE 처리
-    IF TG_OP = 'DELETE' THEN
-        notification = json_build_object(
-            'type', 'session_change',
-            'user_id', OLD.user_id,
-            'session_id', OLD.session_id,
-            'is_active', false,
-            'operation', TG_OP,
-            'timestamp', CURRENT_TIMESTAMP
-        );
-        
-        PERFORM pg_notify('session_updates', notification::text);
-        RETURN OLD;
-    END IF;
-    
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
+-- 5. 세션 변경 알림 트리거 함수 (제거됨 - SSE 관련)
 
--- 6. 사용자 온라인 상태 알림 트리거 함수
-CREATE OR REPLACE FUNCTION notify_user_status_change()
-RETURNS trigger AS $$
-DECLARE
-    notification json;
-    user_online_status boolean;
-BEGIN
-    -- 사용자 온라인 상태 확인
-    SELECT EXISTS(
-        SELECT 1 FROM sessions 
-        WHERE user_id = COALESCE(NEW.user_id, OLD.user_id)
-        AND is_active = true 
-        AND expires_at > CURRENT_TIMESTAMP
-    ) INTO user_online_status;
-    
-    notification = json_build_object(
-        'type', 'user_status_change',
-        'user_id', COALESCE(NEW.user_id, OLD.user_id),
-        'is_online', user_online_status,
-        'operation', TG_OP,
-        'timestamp', CURRENT_TIMESTAMP
-    );
-    
-    PERFORM pg_notify('user_status_updates', notification::text);
-    
-    IF TG_OP = 'DELETE' THEN
-        RETURN OLD;
-    ELSE
-        RETURN NEW;
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
+-- 6. 사용자 온라인 상태 알림 트리거 함수 (제거됨 - SSE 관련)
 
--- 7. 테스트 알림 함수
-CREATE OR REPLACE FUNCTION test_notification()
-RETURNS void AS $$
-BEGIN
-    PERFORM pg_notify('test_channel', json_build_object(
-        'type', 'test',
-        'message', 'Hello from PostgreSQL!',
-        'timestamp', CURRENT_TIMESTAMP
-    )::text);
-END;
-$$ LANGUAGE plpgsql;
+-- 7. 테스트 알림 함수 (제거됨 - SSE 관련)
 
--- 8. 트리거 생성
-DROP TRIGGER IF EXISTS session_change_trigger ON sessions;
-CREATE TRIGGER session_change_trigger
-    AFTER INSERT OR UPDATE OR DELETE ON sessions
-    FOR EACH ROW
-    EXECUTE FUNCTION notify_session_change();
-
-DROP TRIGGER IF EXISTS user_status_change_trigger ON users;
-CREATE TRIGGER user_status_change_trigger
-    AFTER INSERT OR UPDATE OR DELETE ON users
-    FOR EACH ROW
-    EXECUTE FUNCTION notify_user_status_change();
+-- 8. 트리거 생성 (제거됨 - SSE 관련)
 
 -- 9. 세션 정리 함수 (선택사항)
 CREATE OR REPLACE FUNCTION cleanup_expired_sessions()
@@ -303,19 +187,14 @@ VALUES (
 DO $$
 BEGIN
     RAISE NOTICE '==================================================';
-    RAISE NOTICE '✅ 세션 관리 및 실시간 업데이트 마이그레이션 완료';
+    RAISE NOTICE '✅ 세션 관리 마이그레이션 완료';
     RAISE NOTICE '==================================================';
     RAISE NOTICE '📋 추가된 기능:';
     RAISE NOTICE '   - sessions 테이블 (세션 관리)';
-    RAISE NOTICE '   - users_online_status 뷰 (실시간 온라인 상태)';
-    RAISE NOTICE '   - PostgreSQL LISTEN/NOTIFY 트리거';
     RAISE NOTICE '   - 세션 정리 및 활동 추적 함수';
     RAISE NOTICE '==================================================';
     RAISE NOTICE '🔑 기본 계정 정보:';
     RAISE NOTICE '   관리자: admin@example.com / password123';
     RAISE NOTICE '   테스터: user-t001@example.com / password123';
-    RAISE NOTICE '==================================================';
-    RAISE NOTICE '🧪 테스트 채널: session_updates, user_status_updates';
-    RAISE NOTICE '   테스트 명령: SELECT test_notification();';
     RAISE NOTICE '==================================================';
 END $$;

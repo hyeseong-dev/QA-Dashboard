@@ -1,5 +1,10 @@
--- PostgreSQL LISTEN/NOTIFY 트리거 생성
+-- PostgreSQL LISTEN/NOTIFY 트리거 생성 (DISABLED - SSE 기능 제거됨)
 -- 세션 상태 변경 시 실시간 알림을 위한 트리거 함수
+
+-- DISABLED: SSE 실시간 추적 기능이 제거되어 이 마이그레이션은 비활성화됩니다.
+-- 파일은 참고용으로만 보관됩니다.
+
+/*
 
 -- 세션 변경 알림 함수
 CREATE OR REPLACE FUNCTION notify_session_change()
@@ -110,3 +115,5 @@ BEGIN
     RAISE NOTICE '채널: session_updates, user_status_updates';
     RAISE NOTICE '테스트: SELECT test_notification();';
 END $$;
+
+*/

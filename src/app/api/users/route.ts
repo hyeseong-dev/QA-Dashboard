@@ -14,7 +14,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // Fetch all users with online status from view
+    // Fetch all users from users table
     const result = await query(
       `SELECT 
         user_id,
@@ -25,13 +25,11 @@ export async function GET(request: Request) {
         position,
         phone,
         profile_image,
-        is_online,
         last_login_at,
         created_at,
-        updated_at,
-        last_activity_from_session
-      FROM users_online_status
-      ORDER BY is_online DESC, user_name ASC`
+        updated_at
+      FROM users
+      ORDER BY user_name ASC`
     );
 
     return NextResponse.json(result.rows);
