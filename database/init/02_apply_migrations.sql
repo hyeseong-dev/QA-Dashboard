@@ -84,13 +84,13 @@ BEGIN
     RAISE NOTICE '   ✅ sessions 테이블 및 인덱스 생성됨';
 END $$;
 
--- 3. 실시간 업데이트 기능 (트리거 및 함수)
+-- 3. 사용자 온라인 상태 뷰 (실시간 기능 제거됨)
 DO $$
 BEGIN
-    RAISE NOTICE '📝 3/4: 실시간 업데이트 시스템 설정...';
+    RAISE NOTICE '📝 3/4: 사용자 온라인 상태 뷰 설정...';
 END $$;
 
--- 사용자 온라인 상태 뷰
+-- 사용자 온라인 상태 뷰 (단순화된 버전)
 CREATE OR REPLACE VIEW users_online_status AS
 SELECT 
     u.user_id,
@@ -116,99 +116,7 @@ LEFT JOIN (
     AND expires_at > CURRENT_TIMESTAMP
 ) s ON u.user_id = s.user_id;
 
--- 세션 변경 알림 트리거 함수
-CREATE OR REPLACE FUNCTION notify_session_change()
-RETURNS trigger AS $$
-DECLARE
-    notification json;
-BEGIN
-    IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-        notification = json_build_object(
-            'type', 'session_change',
-            'user_id', NEW.user_id,
-            'session_id', NEW.session_id,
-            'is_active', NEW.is_active,
-            'last_activity', NEW.last_activity,
-            'operation', TG_OP,
-            'timestamp', CURRENT_TIMESTAMP
-        );
-        PERFORM pg_notify('session_updates', notification::text);
-        RETURN NEW;
-    END IF;
-    
-    IF TG_OP = 'DELETE' THEN
-        notification = json_build_object(
-            'type', 'session_change',
-            'user_id', OLD.user_id,
-            'session_id', OLD.session_id,
-            'is_active', false,
-            'operation', TG_OP,
-            'timestamp', CURRENT_TIMESTAMP
-        );
-        PERFORM pg_notify('session_updates', notification::text);
-        RETURN OLD;
-    END IF;
-    
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
--- 사용자 온라인 상태 알림 트리거 함수
-CREATE OR REPLACE FUNCTION notify_user_status_change()
-RETURNS trigger AS $$
-DECLARE
-    notification json;
-    user_online_status boolean;
-BEGIN
-    SELECT EXISTS(
-        SELECT 1 FROM sessions 
-        WHERE user_id = COALESCE(NEW.user_id, OLD.user_id)
-        AND is_active = true 
-        AND expires_at > CURRENT_TIMESTAMP
-    ) INTO user_online_status;
-    
-    notification = json_build_object(
-        'type', 'user_status_change',
-        'user_id', COALESCE(NEW.user_id, OLD.user_id),
-        'is_online', user_online_status,
-        'operation', TG_OP,
-        'timestamp', CURRENT_TIMESTAMP
-    );
-    
-    PERFORM pg_notify('user_status_updates', notification::text);
-    
-    IF TG_OP = 'DELETE' THEN
-        RETURN OLD;
-    ELSE
-        RETURN NEW;
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
--- 테스트 알림 함수
-CREATE OR REPLACE FUNCTION test_notification()
-RETURNS void AS $$
-BEGIN
-    PERFORM pg_notify('test_channel', json_build_object(
-        'type', 'test',
-        'message', 'Hello from PostgreSQL!',
-        'timestamp', CURRENT_TIMESTAMP
-    )::text);
-END;
-$$ LANGUAGE plpgsql;
-
--- 트리거 생성
-DROP TRIGGER IF EXISTS session_change_trigger ON sessions;
-CREATE TRIGGER session_change_trigger
-    AFTER INSERT OR UPDATE OR DELETE ON sessions
-    FOR EACH ROW
-    EXECUTE FUNCTION notify_session_change();
-
-DROP TRIGGER IF EXISTS user_status_change_trigger ON users;
-CREATE TRIGGER user_status_change_trigger
-    AFTER INSERT OR UPDATE OR DELETE ON users
-    FOR EACH ROW
-    EXECUTE FUNCTION notify_user_status_change();
+-- 실시간 알림 기능 제거됨 (PostgreSQL LISTEN/NOTIFY 미사용)
 
 -- 유틸리티 함수들
 CREATE OR REPLACE FUNCTION cleanup_expired_sessions()
@@ -241,10 +149,112 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 4. 사용자 계정 및 비밀번호 설정
+-- 4. 테스트 케이스 트리 구조 컬럼 추가
 DO $$
 BEGIN
-    RAISE NOTICE '📝 4/4: 사용자 계정 설정...';
+    RAISE NOTICE '📝 4/5: 테스트 케이스 트리 구조 업데이트...';
+    
+    -- parent_id 컬럼 추가 (없는 경우에만)
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'test_cases' AND column_name = 'parent_id'
+    ) THEN
+        ALTER TABLE test_cases ADD COLUMN parent_id VARCHAR(50);
+        RAISE NOTICE '   ✅ parent_id 컬럼 추가됨';
+    ELSE
+        RAISE NOTICE '   ⏭️  parent_id 컬럼 이미 존재';
+    END IF;
+    
+    -- depth 컬럼 추가 (없는 경우에만)
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'test_cases' AND column_name = 'depth'
+    ) THEN
+        ALTER TABLE test_cases ADD COLUMN depth INTEGER DEFAULT 1;
+        RAISE NOTICE '   ✅ depth 컬럼 추가됨';
+    ELSE
+        RAISE NOTICE '   ⏭️  depth 컬럼 이미 존재';
+    END IF;
+    
+    -- sort_order 컬럼 추가 (없는 경우에만)
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'test_cases' AND column_name = 'sort_order'
+    ) THEN
+        ALTER TABLE test_cases ADD COLUMN sort_order INTEGER DEFAULT 1;
+        RAISE NOTICE '   ✅ sort_order 컬럼 추가됨';
+    ELSE
+        RAISE NOTICE '   ⏭️  sort_order 컬럼 이미 존재';
+    END IF;
+    
+    -- parent_id 외래키 제약조건 추가
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'fk_test_cases_parent' AND table_name = 'test_cases'
+    ) THEN
+        ALTER TABLE test_cases 
+        ADD CONSTRAINT fk_test_cases_parent 
+        FOREIGN KEY (parent_id) REFERENCES test_cases(case_id) ON DELETE CASCADE;
+        RAISE NOTICE '   ✅ parent_id 외래키 제약조건 추가됨';
+    ELSE
+        RAISE NOTICE '   ⏭️  parent_id 외래키 제약조건 이미 존재';
+    END IF;
+    
+    -- 인덱스 추가
+    CREATE INDEX IF NOT EXISTS idx_test_cases_parent_id ON test_cases(parent_id);
+    CREATE INDEX IF NOT EXISTS idx_test_cases_sort_order ON test_cases(sort_order);
+    
+    -- 기존 레코드의 sort_order 값 업데이트 (CTE를 사용하여 윈도우 함수 문제 해결)
+    WITH numbered_cases AS (
+        SELECT case_id, ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY case_id) as new_sort_order
+        FROM test_cases
+        WHERE sort_order IS NULL OR sort_order = 1
+    )
+    UPDATE test_cases 
+    SET sort_order = numbered_cases.new_sort_order
+    FROM numbered_cases
+    WHERE test_cases.case_id = numbered_cases.case_id;
+    
+    RAISE NOTICE '   ✅ 테스트 케이스 트리 구조 업데이트 완료';
+END $$;
+
+-- 5. 오류 추적 및 수정 상태 컬럼 추가
+DO $$
+BEGIN
+    RAISE NOTICE '📝 5/6: 오류 추적 컬럼 추가...';
+    
+    -- error_type 컬럼 추가 (없는 경우에만)
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'test_cases' AND column_name = 'error_type'
+    ) THEN
+        ALTER TABLE test_cases ADD COLUMN error_type VARCHAR(50);
+        RAISE NOTICE '   ✅ error_type 컬럼 추가됨';
+    ELSE
+        RAISE NOTICE '   ⏭️  error_type 컬럼 이미 존재';
+    END IF;
+    
+    -- fix_checked 컬럼 추가 (없는 경우에만)
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'test_cases' AND column_name = 'fix_checked'
+    ) THEN
+        ALTER TABLE test_cases ADD COLUMN fix_checked BOOLEAN DEFAULT false;
+        RAISE NOTICE '   ✅ fix_checked 컬럼 추가됨';
+    ELSE
+        RAISE NOTICE '   ⏭️  fix_checked 컬럼 이미 존재';
+    END IF;
+    
+    -- 인덱스 추가
+    CREATE INDEX IF NOT EXISTS idx_test_cases_error_type ON test_cases(error_type);
+    
+    RAISE NOTICE '   ✅ 오류 추적 컬럼 업데이트 완료';
+END $$;
+
+-- 6. 사용자 계정 및 비밀번호 설정
+DO $$
+BEGIN
+    RAISE NOTICE '📝 6/6: 사용자 계정 설정...';
     
     -- 관리자 계정 (user-a006) - bcrypt hash for 'password123'
     INSERT INTO users (user_id, user_name, email, role, password_hash, created_at, updated_at) 
@@ -304,9 +314,9 @@ BEGIN
     RAISE NOTICE '==================================================';
     RAISE NOTICE '📋 설치된 기능:';
     RAISE NOTICE '   ✅ 세션 관리 시스템';
-    RAISE NOTICE '   ✅ 실시간 사용자 상태 업데이트';
-    RAISE NOTICE '   ✅ PostgreSQL LISTEN/NOTIFY';
     RAISE NOTICE '   ✅ 사용자 온라인 상태 추적';
+    RAISE NOTICE '   ⚠️ 실시간 기능 제거됨 (LISTEN/NOTIFY 미사용)';
+    RAISE NOTICE '   ✅ 테스트 케이스 계층 구조 지원';
     RAISE NOTICE '==================================================';
     RAISE NOTICE '🔑 기본 로그인 계정:';
     RAISE NOTICE '   👔 관리자: admin@example.com / password123';

@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🎯 PROJECT CONSTITUTION
+
+**IMPORTANT**: This project follows the **Five-Layer Context Architecture** for all AI interactions. 
+
+📋 **Always reference `CONSTITUTION.md`** for:
+- Systematic context engineering approach
+- QA Dashboard domain expertise  
+- Implementation standards and quality gates
+- Communication protocols and output formats
+
+The Constitution increases success rates from 30% to 90%+ through structured context management.
+
 ## Project Overview
 
 Multi-Project QA Dashboard System - A Next.js fullstack application with PostgreSQL for collaborative testing workflows. The system enables multiple projects with independent QA environments, real-time test result tracking, and comprehensive dashboard analytics.

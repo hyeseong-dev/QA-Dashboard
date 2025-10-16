@@ -27,7 +27,7 @@ export default function UsersPage() {
   const [filterRole, setFilterRole] = useState<'all' | 'Admin' | 'Tester'>('all');
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   
-  const { user, loading: authLoading, realtimeStatus } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   // 온라인 상태만 업데이트하는 함수
@@ -83,29 +83,15 @@ export default function UsersPage() {
     }
   }, [user, authLoading, router, initialLoadDone]);
 
-  // SSE 실시간 사용자 상태 업데이트
+  // 주기적 온라인 상태 업데이트 (실시간 기능 대체)
   useEffect(() => {
     if (!user || !initialLoadDone) return;
     
-    // SSE에서 세션 변경 이벤트를 받으면 사용자 목록 새로고침
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'sse_user_update') {
-        updateOnlineStatus();
-      }
-    };
-    
-    // SSE 이벤트를 받기 위한 커스텀 이벤트 리스너
-    const handleSSEUpdate = () => {
-      updateOnlineStatus();
-    };
-    
-    // SSE 업데이트 트리거를 위한 이벤트 등록
-    window.addEventListener('sse_session_change', handleSSEUpdate);
-    window.addEventListener('storage', handleStorageChange);
+    // 30초마다 온라인 상태 업데이트
+    const interval = setInterval(updateOnlineStatus, 30000);
     
     return () => {
-      window.removeEventListener('sse_session_change', handleSSEUpdate);
-      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
     };
   }, [user, initialLoadDone]);
 
@@ -202,17 +188,11 @@ export default function UsersPage() {
               <h1 className="text-3xl font-bold text-slate-900">
                 👥 사용자 관리
               </h1>
-              {/* 실시간 연결 상태 표시기 */}
+              {/* 데이터 업데이트 정보 */}
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${
-                  realtimeStatus === 'connected' ? 'bg-green-500' : 
-                  realtimeStatus === 'connecting' ? 'bg-yellow-500' :
-                  realtimeStatus === 'error' ? 'bg-red-500' : 'bg-gray-400'
-                }`} />
+                <div className="w-2 h-2 rounded-full bg-blue-500" />
                 <span className="text-xs text-slate-500">
-                  {realtimeStatus === 'connected' ? '실시간 연결됨' :
-                   realtimeStatus === 'connecting' ? '연결 중...' :
-                   realtimeStatus === 'error' ? '연결 오류' : '오프라인'}
+                  정기 업데이트 (30초)
                 </span>
               </div>
             </div>

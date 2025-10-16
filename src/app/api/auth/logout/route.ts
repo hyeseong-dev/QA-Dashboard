@@ -22,11 +22,16 @@ export async function POST(request: Request) {
       verify(token, JWT_SECRET);
 
       // With JWT-only auth, logout is client-side (remove token from storage)
-      // Server just validates the token was valid
-      return NextResponse.json({
+      // Server just validates the token was valid and clears cookie
+      const response = NextResponse.json({
         success: true,
         message: '로그아웃 되었습니다.'
       });
+
+      // Clear the httpOnly cookie
+      response.cookies.delete('auth_token');
+
+      return response;
       
     } catch {
       return NextResponse.json(

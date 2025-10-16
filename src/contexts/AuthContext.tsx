@@ -136,10 +136,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // Always clear local storage and state
+      // Clear all authentication and session data
       localStorage.removeItem('auth_token');
       localStorage.removeItem('saved_email');
       localStorage.removeItem('saved_password');
+      
+      // Clear QA Environment data
+      localStorage.removeItem('qa_environment');
+      
+      // Clear any other application-specific data
+      localStorage.removeItem('project_preferences');
+      
       setUser(null);
     }
   };

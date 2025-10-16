@@ -23,15 +23,23 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 interface DashboardProps {
   projectId: string;
   onBackToProjects: () => void;
+  initialFilters?: {
+    category?: string;
+    status?: string;
+    tester?: string;
+    view?: string;
+  };
 }
 
-export default function Dashboard({ projectId, onBackToProjects }: DashboardProps) {
+export default function Dashboard({ projectId, onBackToProjects, initialFilters }: DashboardProps) {
   const { qaEnvironment, clearQAEnvironment } = useQAEnvironment();
   const { logout } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
-  const [currentFilters, setCurrentFilters] = useState({ category: 'all' });
+  const [currentFilters, setCurrentFilters] = useState({ 
+    category: initialFilters?.category || 'all' 
+  });
   const [categoryRefreshKey, setCategoryRefreshKey] = useState(0);
   
   // 모바일 화면 감지 (768px 이하)

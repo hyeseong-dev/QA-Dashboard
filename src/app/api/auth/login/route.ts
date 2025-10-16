@@ -65,11 +65,23 @@ export async function POST(request: Request) {
       role: user.role
     };
 
-    return NextResponse.json({
+    // Create response with token in body and httpOnly cookie
+    const response = NextResponse.json({
       success: true,
       token,
       user: userData
     });
+
+    // Set httpOnly cookie for additional security
+    response.cookies.set('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      path: '/'
+    });
+
+    return response;
 
   } catch (error) {
     console.error('Login error:', error);
